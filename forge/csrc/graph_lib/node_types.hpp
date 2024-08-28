@@ -261,6 +261,7 @@ protected:
     bool requires_grad_;
     bool is_loss_output_;
     bool is_saved_intermediate_;
+    bool is_intermediate_;
     bool untilize_;
     RuntimeTensorTransform runtime_tensor_transform;
     // The golden info is needed if we fractured the output and need to reconstruct it for golden comparison
@@ -284,6 +285,7 @@ protected:
     void set_loss_output() { is_loss_output_ = true; }
     void set_saved_intermediate(bool saved_intermediate) { is_saved_intermediate_ = saved_intermediate; }
     void set_untilize(bool should_untilize) { untilize_ = should_untilize; }
+    void mark_intermediate() { is_intermediate_ = true; }
     virtual std::unique_ptr<Node> clone(std::string const& name = "") override;
 
     void set_runtime_tensor_transform(RuntimeTensorTransform transform)

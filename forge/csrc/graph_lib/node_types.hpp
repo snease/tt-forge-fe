@@ -286,6 +286,7 @@ protected:
     void set_saved_intermediate(bool saved_intermediate) { is_saved_intermediate_ = saved_intermediate; }
     void set_untilize(bool should_untilize) { untilize_ = should_untilize; }
     void mark_intermediate() { is_intermediate_ = true; }
+    bool is_intermediate() { return is_intermediate_; }
     virtual std::unique_ptr<Node> clone(std::string const& name = "") override;
 
     void set_runtime_tensor_transform(RuntimeTensorTransform transform)

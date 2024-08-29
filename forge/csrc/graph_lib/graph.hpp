@@ -228,6 +228,7 @@ class Graph
     void update_node_name(Node *node, const std::string &new_name);
 
     void register_module_inputs(const std::vector<NodeId> &module_inputs, bool append = false);
+    void register_module_params(const std::vector<NodeId>& module_params, bool append = false);
     void register_module_outputs(const std::vector<NodeId> &module_outputs, std::vector<bool> requires_grad, bool append = false);
     void register_module_targets(const std::vector<NodeId> &module_targets);
     void copy_module_inputs(Graph *old_graph, const std::unordered_map<Node *, Node *> &old_to_new);
@@ -248,6 +249,7 @@ class Graph
 
     // Return inputs to the graph in order they were added
     std::vector<Node *> ordered_module_inputs() const;
+    std::vector<Node *> ordered_module_params() const;
     std::vector<Node *> ordered_module_outputs() const;
     std::vector<Node *> ordered_partial_datacopy_outputs() const;
     std::vector<Node *> get_constant_nodes(bool recurse = false) const;
@@ -322,6 +324,7 @@ class Graph
 
     bool output_node_redirected_ = false;
     std::vector<NodeId> ordered_module_input_node_ids_;
+    std::vector<NodeId> ordered_module_params_node_ids_;
     std::vector<NodeId> ordered_module_output_node_ids_;
     std::vector<NodeId> ordered_module_target_node_ids_;
 

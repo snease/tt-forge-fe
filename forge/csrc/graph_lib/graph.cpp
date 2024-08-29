@@ -598,6 +598,15 @@ void Graph::register_module_inputs(const std::vector<NodeId>& module_inputs, boo
     }
 }
 
+void Graph::register_module_params(const std::vector<NodeId>& module_params, bool append) {
+    if (!append) {
+        this->ordered_module_params_node_ids_.clear();
+    }
+    for (NodeId module_param : module_params) {
+        this->ordered_module_params_node_ids_.push_back(module_param);
+    }
+}
+
 std::size_t Graph::remove_module_input(NodeId input)
 {
     auto it = std::find(ordered_module_input_node_ids_.begin(), ordered_module_input_node_ids_.end(), input);
@@ -673,8 +682,6 @@ void Graph::copy_module_targets(Graph *old_graph, const std::unordered_map<Node 
         }
     }
 }
-
-
 
 void Graph::register_module_outputs(const std::vector<NodeId>& module_outputs, std::vector<bool> requires_grad, bool append) {
     TT_ASSERT(module_outputs.size() == requires_grad.size());
@@ -753,6 +760,20 @@ std::vector<Node *> Graph::ordered_module_inputs() const {
         }
     }
     return ordered_inputs;
+}
+
+// Return inputs to the graph in way module/user expects
+std::vector<Node *> Graph::ordered_module_params() const {
+    std::vector<Node*> ordered_params;
+    for (auto param_node_id : this->ordered_module_params_node_ids_) {
+        Node* node = this->node_by_id(param_node_id);
+
+        if (this->is_node_visible(node) && this->user_edges(node).size() != 0)
+        {
+            ordered_params.push_back(this->node_by_id(param_node_id));
+        }
+    }
+    return ordered_params;
 }
 
 std::vector<unsigned int> Graph::get_ordered_input_subgraph_indices() const {

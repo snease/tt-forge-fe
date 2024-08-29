@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 #include "exec_graphs.hpp"
+#include <memory>
 #include <utils/assert.hpp>
 #include <utils/logger.hpp>
 
@@ -18,9 +19,9 @@ using Graph = tt::graphlib::Graph;
 
 namespace tt::passes
 {
-    std::vector<tt::graphlib::Graph*> create_execution_graphs(tt::graphlib::Graph * graph)
+    void create_execution_graphs(tt::graphlib::Graph * graph)
     {
-        Graph *fwd_graph = new Graph(tt::graphlib::IRLevel::IR_TT_FORGE, graph->name() + "_fwd");
+        auto fwd_graph = std::make_unique<Graph>(tt::graphlib::IRLevel::IR_TT_FORGE, graph->name() + "_fwd");
 
         for (auto node : graph->nodes_by_type(graphlib::NodeType::kPyOp))
         {
@@ -118,7 +119,7 @@ namespace tt::passes
              log_info("Node: {}", node->name());
         }
 
-        Graph *bwd_graph = new Graph(tt::graphlib::IRLevel::IR_TT_FORGE, graph->name() + "_bwd");
+        auto bwd_graph = std::make_unique<Graph>(tt::graphlib::IRLevel::IR_TT_FORGE, graph->name() + "_bwd");
 
         for (auto input_node : graph->nodes([](const Node* node) { return node->node_type() == NodeType::kInput; }))
         {
@@ -234,8 +235,9 @@ namespace tt::passes
 
         fwd_graph->dump("split_exec_graphs_fwd");
         bwd_graph->dump("split_exec_graphs_bwd");
-
-        return {fwd_graph, bwd_graph};
+    
+        graph->set_execution_subgraph(graphlib::SubgraphType::Forward, std::move(fwd_graph));
+        graph->set_execution_subgraph(graphlib::SubgraphType::Backward, std::move(bwd_graph));
     }
 
 } // namespace tt::passes

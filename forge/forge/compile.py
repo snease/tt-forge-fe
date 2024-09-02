@@ -836,7 +836,7 @@ def create_execution_graphs(context: CompileContext) -> CompileDepth:
     """
     graph = context.graph
 
-    pybuda._C.create_execution_graphs(graph)
+    forge._C.create_execution_graphs(graph)
 
     return CompileDepth.RUN_MLIR_COMPILER
 

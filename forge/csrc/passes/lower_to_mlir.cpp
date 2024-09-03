@@ -68,6 +68,18 @@ class MLIRGenerator
             for (auto graph : module.graphs())
             {
                 emit_mlir_function(graph, graph->name());
+                // Create a string to store the output
+                std::string moduleStr;
+                llvm::raw_string_ostream rso(moduleStr);
+
+                // Print the MLIR module
+                mlir::OpPrintingFlags printFlags;
+                printFlags.enableDebugInfo();
+                graphModule_.print(rso, printFlags);
+
+                rso.flush();
+
+                log_info(LogMLIRCompiler, "MLIR module after lowering TT-Forge graph:\n{}", moduleStr);
             }
 
             log_info(LogMLIRCompiler, "MLIR module generated successfully.");
@@ -82,7 +94,6 @@ class MLIRGenerator
                 throw std::runtime_error("Generated MLIR module failed verification.");
             }
 
-#ifdef DEBUG
             // Create a string to store the output
             std::string moduleStr;
             llvm::raw_string_ostream rso(moduleStr);
@@ -94,8 +105,7 @@ class MLIRGenerator
 
             rso.flush();
 
-            log_trace(LogMLIRCompiler, "MLIR module after lowering TT-Forge graph:\n{}", moduleStr);
-#endif
+            log_info(LogMLIRCompiler, "MLIR module after lowering TT-Forge graph:\n{}", moduleStr);
 
             return graphModule_;
         }
@@ -171,7 +181,7 @@ class MLIRGenerator
             symbolTable_.clear();
 
             // Add the graph inputs to the argument list
-            for (auto *input: graph->ordered_module_inputs()) //for (auto *input : graph->nodes_by_type(tt::graphlib::kInput))
+            for (auto *input: graph->ordered_module_inputs())
             {
                 log_trace(LogMLIRCompiler, "Adding input {} to the argument list.", input->name());
 
@@ -193,6 +203,12 @@ class MLIRGenerator
             {
                 argument_nodes.push_back(parameter);
                 argument_types.push_back(get_node_type(parameter));
+            }
+
+            for (auto *constant: graph->ordered_module_constants())
+            {
+                argument_nodes.push_back(constant);
+                argument_types.push_back(get_node_type(constant));
             }
 
             // Assemble the function return values (outputs)

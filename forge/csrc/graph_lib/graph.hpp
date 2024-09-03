@@ -224,6 +224,8 @@ class Graph
     std::size_t remove_module_target(NodeId target);
 
     void add_module_input(NodeId input);
+    void add_module_param(NodeId param_node);
+    void add_module_constant(NodeId constant_node);
     void add_module_output(NodeId output);
     void add_module_target(NodeId target);
 
@@ -235,6 +237,7 @@ class Graph
     // Return inputs to the graph in order they were added
     std::vector<Node *> ordered_module_inputs() const;
     std::vector<Node *> ordered_module_params() const;
+    std::vector<Node *> ordered_module_constants() const;
     std::vector<Node *> ordered_module_outputs() const;
     std::vector<Node *> ordered_partial_datacopy_outputs() const;
     std::vector<Node *> get_constant_nodes(bool recurse = false) const;
@@ -301,7 +304,8 @@ class Graph
 
     bool output_node_redirected_ = false;
     std::vector<NodeId> ordered_module_input_node_ids_;
-    std::vector<NodeId> ordered_module_params_node_ids_;
+    std::vector<NodeId> ordered_module_param_node_ids_;
+    std::vector<NodeId> ordered_module_constant_node_ids_;
     std::vector<NodeId> ordered_module_output_node_ids_;
     std::vector<NodeId> ordered_module_target_node_ids_;
 
@@ -348,14 +352,26 @@ NodeClassType *Graph::add_node(std::unique_ptr<NodeClassType> node, unsigned int
         num_subgraphs_ = subgraph_id + 1;
     node_id_to_subgraph_id_[node_id] = subgraph_id;
 
-    // if constexpr (std::is_same_v<NodeClassType, InputNode>)
-    // {
-    //     this->register_module_inputs({node_id});
-    // }
-    // else if constexpr (std::is_same_v<NodeClassType, OutputNode>)
-    // {
-    //     this->register_module_outputs({node_id}, {false});
-    // }
+    if constexpr (std::is_same_v<NodeClassType, InputNode>)
+    {
+        auto input_node = nodes_map_[node_id]->as<InputNode>();
+        if (input_node->input_type() == InputNodeType::Activation || input_node->input_type() == InputNodeType::Loss)
+        {
+            this->add_module_input(node_id);
+        }
+        else if (input_node->input_type() == InputNodeType::Parameter)
+        {
+            this->add_module_param(node_id);
+        }
+        else if (input_node->input_type() == InputNodeType::Constant)
+        {
+            this->add_module_constant(node_id);
+        }
+    }
+    else if constexpr (std::is_same_v<NodeClassType, OutputNode>)
+    {
+        this->add_module_output(node_id);
+    }
 
     return result;
 }

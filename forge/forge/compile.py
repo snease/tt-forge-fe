@@ -1213,7 +1213,6 @@ def generate_graph(
         [module_outputs.remove(value) for value in output_to_remove]
         [out_requires_grad.remove(value) for value in out_requires_grad_to_remove]
 
-    graph.register_module_inputs(module_inputs)
     graph.register_module_targets(module_targets)
     graph.register_module_outputs(module_outputs, out_requires_grad)
 

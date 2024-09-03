@@ -6,6 +6,7 @@
 #include <algorithm>
 #include <iostream>
 
+#include "graph_lib/defines.hpp"
 #include "graph_lib/node.hpp"
 #include "graph_lib/node_types.hpp"
 #include "graph_lib/utils.hpp"
@@ -600,10 +601,10 @@ void Graph::register_module_inputs(const std::vector<NodeId>& module_inputs, boo
 
 void Graph::register_module_params(const std::vector<NodeId>& module_params, bool append) {
     if (!append) {
-        this->ordered_module_params_node_ids_.clear();
+        this->ordered_module_param_node_ids_.clear();
     }
     for (NodeId module_param : module_params) {
-        this->ordered_module_params_node_ids_.push_back(module_param);
+        this->ordered_module_param_node_ids_.push_back(module_param);
     }
 }
 
@@ -636,11 +637,32 @@ std::size_t Graph::remove_module_target(NodeId target)
 
 void Graph::add_module_input(NodeId input)
 {
+    TT_ASSERT(node_by_id(input)->node_type() == NodeType::kInput);
+    TT_ASSERT(node_by_id(input)->as<InputNode>()->is_activation()
+              || node_by_id(input)->as<InputNode>()->is_loss());
+
     ordered_module_input_node_ids_.push_back(input);
+}
+
+void Graph::add_module_param(NodeId param_node)
+{
+    TT_ASSERT(node_by_id(param_node)->node_type() == NodeType::kInput);
+    TT_ASSERT(node_by_id(param_node)->as<InputNode>()->is_parameter());
+
+    ordered_module_param_node_ids_.push_back(param_node);
+}
+
+void Graph::add_module_constant(NodeId const_node)
+{
+    TT_ASSERT(node_by_id(const_node)->node_type() == NodeType::kInput);
+    TT_ASSERT(node_by_id(const_node)->as<InputNode>()->is_constant());
+
+    ordered_module_constant_node_ids_.push_back(const_node);
 }
 
 void Graph::add_module_output(NodeId output)
 {
+    TT_ASSERT(node_by_id(output)->node_type() == NodeType::kOutput);
     ordered_module_output_node_ids_.push_back(output);
 }
 
@@ -753,19 +775,33 @@ std::vector<Node *> Graph::ordered_module_inputs() const {
     std::vector<Node*> ordered_inputs;
     for (auto input_node_id : this->ordered_module_input_node_ids_) {
         Node* node = this->node_by_id(input_node_id);
+        log_info("Input node: {}", node->name());
 
         if (this->is_node_visible(node) && this->user_edges(node).size() != 0)
         {
+            log_info("Input passed checks node: {}", node->name());
             ordered_inputs.push_back(this->node_by_id(input_node_id));
         }
     }
     return ordered_inputs;
 }
 
-// Return inputs to the graph in way module/user expects
 std::vector<Node *> Graph::ordered_module_params() const {
     std::vector<Node*> ordered_params;
-    for (auto param_node_id : this->ordered_module_params_node_ids_) {
+    for (auto param_node_id : this->ordered_module_param_node_ids_) {
+        Node* node = this->node_by_id(param_node_id);
+
+        if (this->is_node_visible(node) && this->user_edges(node).size() != 0)
+        {
+            ordered_params.push_back(this->node_by_id(param_node_id));
+        }
+    }
+    return ordered_params;
+}
+
+std::vector<Node *> Graph::ordered_module_constants() const {
+    std::vector<Node*> ordered_params;
+    for (auto param_node_id : this->ordered_module_constant_node_ids_) {
         Node* node = this->node_by_id(param_node_id);
 
         if (this->is_node_visible(node) && this->user_edges(node).size() != 0)

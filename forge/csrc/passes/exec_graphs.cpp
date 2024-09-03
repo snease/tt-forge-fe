@@ -103,8 +103,10 @@ namespace tt::passes
         for (auto param : graph->nodes([](const Node* node) { return node->node_type() == NodeType::kInput && node->get_epoch_type() == graphlib::NodeEpochType::Forward; }))
         {
             log_info("Cloning input node {} for fwd exec graph", param->name());
-            auto cloned_input = param->clone(param->name());
-            fwd_graph->add_node(std::move(cloned_input), 0 /*subgraph_id=*/);
+            auto input_node = param->as<graphlib::InputNode>();
+            auto cloned_input = input_node->clone(param->name());
+            std::unique_ptr<graphlib::InputNode> input_node_ptr(cloned_input.release()->as<graphlib::InputNode>());
+            fwd_graph->add_node(std::move(input_node_ptr), 0 /*subgraph_id=*/);
         }
 
         std::unordered_map<std::string, std::string> node_to_intermediate_map;
@@ -158,6 +160,7 @@ namespace tt::passes
                         auto intermediate_output = graphlib::create_node<graphlib::OutputNode>(node->name() + "_intermediate");
                         intermediate_output->mark_intermediate();
                         intermediate_output->set_shape(node->shape());
+                        intermediate_output->set_output_df(node->output_df());
 
                         intermediate_output_node = fwd_graph->add_node(std::move(intermediate_output), 0 /*subgraph_id=*/);
                         node_to_intermediate_map[node->name()] = intermediate_output_node->name();
@@ -170,14 +173,10 @@ namespace tt::passes
 
         auto activation_nodes = map_to_ids(fwd_graph->nodes(is_activation_node));
         auto parameter_nodes = map_to_ids(fwd_graph->nodes(is_parameter_node));
-        fwd_graph->register_module_inputs(activation_nodes);
-        fwd_graph->register_module_params(parameter_nodes);
 
         auto regular_output_nodes = map_to_ids(fwd_graph->nodes(is_regular_output_node));
         auto intermediate_output_nodes = map_to_ids(fwd_graph->nodes(is_intermediate_output_node));
         regular_output_nodes.insert(regular_output_nodes.end(), intermediate_output_nodes.begin(), intermediate_output_nodes.end());
-        std::vector<bool> requires_grad(regular_output_nodes.size(), false);
-        fwd_graph->register_module_outputs(regular_output_nodes, requires_grad);
 
         auto bwd_graph = std::make_unique<Graph>(tt::graphlib::IRLevel::IR_TT_FORGE, "backward");
 
@@ -203,7 +202,8 @@ namespace tt::passes
 
             log_info("Cloning input node {} for bwd exec graph", input_node->name());
             auto cloned_input = input_node->clone(input_node->name());
-            bwd_graph->add_node(std::move(cloned_input), 0 /*subgraph_id=*/);
+            std::unique_ptr<graphlib::InputNode> input_node_ptr(cloned_input.release()->as<graphlib::InputNode>());
+            bwd_graph->add_node(std::move(input_node_ptr), 0 /*subgraph_id=*/);
         }
 
         for (auto fwd_out_node : fwd_graph->nodes_by_type(graphlib::NodeType::kOutput))
@@ -213,6 +213,7 @@ namespace tt::passes
                 log_info("Creating intermediate input {} for bwd graph.", fwd_out_node->name());
                 auto intermediate_input = graphlib::create_node<graphlib::InputNode>(fwd_out_node->name(), graphlib::InputNodeType::Activation, false);
                 intermediate_input->set_shape(fwd_out_node->shape());
+                intermediate_input->set_output_df(fwd_out_node->output_df());
                 bwd_graph->add_node(std::move(intermediate_input), 0 /*subgraph_id=*/);
             }
         }
@@ -292,14 +293,9 @@ namespace tt::passes
         auto loss_nodes = map_to_ids(bwd_graph->nodes(is_loss_input_node));
         parameter_nodes = map_to_ids(bwd_graph->nodes(is_parameter_node));
         activation_nodes.insert(activation_nodes.end(), loss_nodes.begin(), loss_nodes.end());
-        bwd_graph->register_module_inputs(activation_nodes);
-        bwd_graph->register_module_params(parameter_nodes);
 
         regular_output_nodes = map_to_ids(bwd_graph->nodes(is_regular_output_node));
         intermediate_output_nodes = map_to_ids(bwd_graph->nodes(is_intermediate_output_node));
-        regular_output_nodes.insert(regular_output_nodes.end(), intermediate_output_nodes.begin(), intermediate_output_nodes.end());
-        requires_grad = std::vector<bool>(regular_output_nodes.size(), false);
-        bwd_graph->register_module_outputs(regular_output_nodes, requires_grad);
 
         fwd_graph->dump("split_exec_graphs_fwd");
         bwd_graph->dump("split_exec_graphs_bwd");

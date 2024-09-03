@@ -44,15 +44,6 @@ namespace graphlib
 class Node;
 class EdgeAttributes;
 
-enum class SubgraphType : std::uint8_t
-{
-    Forward = 0,
-    Backward = 1,
-    Loss = 2,
-    Optimizer = 3,
-    SubgraphTypeCount = 4,
-};
-
 class Graph
 {
    public:
@@ -288,14 +279,6 @@ class Graph
     bool get_output_node_redirected() const {return this->output_node_redirected_;}
     void set_output_node_redirected(bool output_node_redirected) {this->output_node_redirected_ = output_node_redirected;}
 
-    void set_execution_subgraph(SubgraphType subgraph_type, std::unique_ptr<Graph>&& subgraph) {
-        execution_subgraphs_[static_cast<std::underlying_type_t<SubgraphType>>(subgraph_type)] = std::move(subgraph);
-    }
-
-    Graph* get_execution_subgraph(SubgraphType subgraph_type) const {
-        return execution_subgraphs_[static_cast<std::underlying_type_t<SubgraphType>>(subgraph_type)].get();
-    }
-
    private:
     void mark_node_virtual(const Node *node);
     void mark_node_persisted(const Node *node);
@@ -337,8 +320,6 @@ class Graph
     std::unique_ptr<const std::unordered_set<graphlib::Edge>> ignored_edges_traversal_context_{};
     std::unique_ptr<const std::unordered_set<const Node *>> node_traversal_context_{};
     std::unordered_set<NodeId> virtual_nodes_;
-
-    std::array<std::unique_ptr<Graph>, static_cast<std::underlying_type_t<SubgraphType>>(SubgraphType::SubgraphTypeCount)> execution_subgraphs_;
 
     friend class GraphTraversalContext;
 };

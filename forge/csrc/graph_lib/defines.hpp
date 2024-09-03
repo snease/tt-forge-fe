@@ -19,6 +19,13 @@ using GraphId = std::int64_t;
 using NodeId = std::int64_t;
 using PortId = std::uint32_t;
 
+enum class IRLevel: std::uint8_t
+{
+    IR_TT_FORGE,
+    IR_FORGE,
+    IR_CONSTEVAL,
+};
+
 enum NodeType
 {
     kInput,

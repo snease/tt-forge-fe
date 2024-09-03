@@ -17,6 +17,7 @@
 
 #include "graph_lib/defines.hpp"
 #include "graph_lib/edge.hpp"
+#include "graph_lib/node_types.hpp"
 
 // Jumping through some hoops to allow modifiable edge attributes
 struct EdgeUniqueIdHash
@@ -42,13 +43,6 @@ namespace graphlib
 
 class Node;
 class EdgeAttributes;
-
-enum class IRLevel
-{
-    IR_TT_FORGE,
-    IR_FORGE,
-    IR_CONSTEVAL,
-};
 
 enum class SubgraphType : std::uint8_t
 {
@@ -372,6 +366,16 @@ NodeClassType *Graph::add_node(std::unique_ptr<NodeClassType> node, unsigned int
     if (subgraph_id >= num_subgraphs_)
         num_subgraphs_ = subgraph_id + 1;
     node_id_to_subgraph_id_[node_id] = subgraph_id;
+
+    // if constexpr (std::is_same_v<NodeClassType, InputNode>)
+    // {
+    //     this->register_module_inputs({node_id});
+    // }
+    // else if constexpr (std::is_same_v<NodeClassType, OutputNode>)
+    // {
+    //     this->register_module_outputs({node_id}, {false});
+    // }
+
     return result;
 }
 

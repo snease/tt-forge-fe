@@ -2,6 +2,7 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 #include "autograd/binding.hpp"
+#include "graph_lib/utils.hpp"
 
 #include <vector>
 

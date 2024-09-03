@@ -13,6 +13,7 @@
 #include "graph_lib/graph.hpp"
 #include "graph_lib/node.hpp"
 #include "graph_lib/node_types.hpp"
+#include "graph_lib/utils.hpp"
 #include "nlohmann/json.hpp"
 #include "reportify/to_json.hpp"
 #include "utils/logger.hpp"

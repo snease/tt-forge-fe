@@ -1,4 +1,3 @@
-// SPDX-FileCopyrightText: © 2024 Tenstorrent AI ULC
 //
 // SPDX-License-Identifier: Apache-2.0
 #pragma once
@@ -13,9 +12,10 @@
 #include "graph_lib/edge.hpp"
 #include "graph_lib/node.hpp"
 #include "graph_lib/shape.hpp"
-#include "graph_lib/utils.hpp"
 #include "lower_to_forge/common.hpp"
 #include "shared_utils/sparse_matmul_utils.hpp"
+
+#include "runtime_transforms.hpp"
 
 namespace tt
 {
@@ -55,6 +55,106 @@ enum MemoryAccessType {
 using TagKey = std::string;
 using TagValue = std::variant<bool, std::uint32_t, std::string>;
 using TagHints = std::map<TagKey, TagValue>;
+
+struct OpType
+{
+    using Attr = ForgeOpAttr;
+    using Attrs = ForgeOpAttrs;
+
+    std::string op;
+    std::vector<Attr> attr;  // legacy path
+    Attrs named_attrs;      // new path
+    ForgeOpAttrs forge_attrs; // attrs that will lower directly into the netlist
+
+    OpType(
+        std::string const &op,
+        std::vector<Attr> const &attr = {},
+        ForgeOpAttrs const &forge_attrs = {},
+        Attrs named_attrs = {}) :
+        op(op), attr(attr), named_attrs(named_attrs), forge_attrs(forge_attrs)
+    {
+    }
+
+    bool operator==(const char *name) const { return op == name; }
+    bool operator==(const std::string &name) const { return op == name; }
+    bool operator==(const OpType &other) const
+    {
+        return op == other.op and attr == other.attr and named_attrs == other.named_attrs and
+               forge_attrs == other.forge_attrs;
+    }
+    bool operator!=(const OpType &other) const { return not(*this == other); }
+
+    Attr const& get_attr(std::string const &name) const { return named_attrs.at(name); }
+    Attr& get_attr(std::string const &name) { return named_attrs.at(name); }
+    template <typename T>
+    T const& get_attr_as(std::string const &name) const
+    {
+        return std::get<T>(get_attr(name));
+    }
+    template <typename T>
+    T& get_attr_as(std::string const &name)
+    {
+        return std::get<T>(get_attr(name));
+    }
+
+    py::function py_attr(char const *name, IRLevel ir_level) const;
+    py::function py_attr(char const *name, IRLevel ir_level);
+
+    void set_attr(std::string const &name, Attr attr) { named_attrs[name] = attr; }
+
+    std::string as_string() const {
+        std::string ret = op;
+        if (attr.size() > 0) {
+            ret += "(";
+            for (unsigned int i = 0; i < attr.size(); i++) {
+                if (std::holds_alternative<bool>(attr[i])) {
+                    ret += std::to_string(std::get<bool>(attr[i])) + ",";
+                } else if (std::holds_alternative<int>(attr[i])) {
+                    ret += std::to_string(std::get<int>(attr[i])) + ",";
+                } else if (std::holds_alternative<float>(attr[i])) {
+                    ret += std::to_string(std::get<float>(attr[i])) + ",";
+                } else if (std::holds_alternative<std::string>(attr[i])) {
+                    ret += std::get<std::string>(attr[i]) + ",";
+                } else if (std::holds_alternative<std::vector<int>>(attr[i])) {
+                    auto attr_val = std::get<std::vector<int>>(attr[i]);
+                    size_t num_items = attr_val.size();
+
+                    ret += "[";
+                    for (size_t j = 0 ; j < num_items; ++j)
+                    {
+                        ret += std::to_string(attr_val[j]);
+                        if (j < num_items-1)
+                            ret += ", ";
+                    }
+                    ret += "], ";
+                } else {
+                    TT_ASSERT(false, "Unknown alternative in Attr");
+                }
+            }
+            // ret += "(" + std::to_string(attr[0]);
+            // for (std::size_t i = 1; i < attr.size(); i++) ret += "," + std::to_string(attr[i]);
+            ret += ")";
+        }
+
+        if (named_attrs.size() > 0)
+        {
+            using tt::operator<<;
+            std::stringstream ss;
+            bool first = true;
+            ss << "{";
+            for (auto const &[name, value] : named_attrs)
+            {
+                if (not first)
+                    ss << ", ";
+                ss << name << ": " << value;
+                first = false;
+            }
+            ss << "}";
+            ret += ss.str();
+        }
+        return ret;
+    }
+};
 
 struct TaggedNode : public Node {
     TagHints hints;
@@ -305,106 +405,6 @@ protected:
     std::vector<OpType> &get_golden_transforms() { return golden_transforms; }
     void set_partial_datacopy_golden_output_index(int index) { partial_datacopy_golden_output_index = index; }
     std::optional<int> get_partial_datacopy_golden_output_index() { return partial_datacopy_golden_output_index; }
-};
-
-struct OpType
-{
-    using Attr = ForgeOpAttr;
-    using Attrs = ForgeOpAttrs;
-
-    std::string op;
-    std::vector<Attr> attr;  // legacy path
-    Attrs named_attrs;      // new path
-    ForgeOpAttrs forge_attrs; // attrs that will lower directly into the netlist
-
-    OpType(
-        std::string const &op,
-        std::vector<Attr> const &attr = {},
-        ForgeOpAttrs const &forge_attrs = {},
-        Attrs named_attrs = {}) :
-        op(op), attr(attr), named_attrs(named_attrs), forge_attrs(forge_attrs)
-    {
-    }
-
-    bool operator==(const char *name) const { return op == name; }
-    bool operator==(const std::string &name) const { return op == name; }
-    bool operator==(const OpType &other) const
-    {
-        return op == other.op and attr == other.attr and named_attrs == other.named_attrs and
-               forge_attrs == other.forge_attrs;
-    }
-    bool operator!=(const OpType &other) const { return not(*this == other); }
-
-    Attr const& get_attr(std::string const &name) const { return named_attrs.at(name); }
-    Attr& get_attr(std::string const &name) { return named_attrs.at(name); }
-    template <typename T>
-    T const& get_attr_as(std::string const &name) const
-    {
-        return std::get<T>(get_attr(name));
-    }
-    template <typename T>
-    T& get_attr_as(std::string const &name)
-    {
-        return std::get<T>(get_attr(name));
-    }
-
-    py::function py_attr(char const *name, IRLevel ir_level) const;
-    py::function py_attr(char const *name, IRLevel ir_level);
-
-    void set_attr(std::string const &name, Attr attr) { named_attrs[name] = attr; }
-
-    std::string as_string() const {
-        std::string ret = op;
-        if (attr.size() > 0) {
-            ret += "(";
-            for (unsigned int i = 0; i < attr.size(); i++) {
-                if (std::holds_alternative<bool>(attr[i])) {
-                    ret += std::to_string(std::get<bool>(attr[i])) + ",";
-                } else if (std::holds_alternative<int>(attr[i])) {
-                    ret += std::to_string(std::get<int>(attr[i])) + ",";
-                } else if (std::holds_alternative<float>(attr[i])) {
-                    ret += std::to_string(std::get<float>(attr[i])) + ",";
-                } else if (std::holds_alternative<std::string>(attr[i])) {
-                    ret += std::get<std::string>(attr[i]) + ",";
-                } else if (std::holds_alternative<std::vector<int>>(attr[i])) {
-                    auto attr_val = std::get<std::vector<int>>(attr[i]);
-                    size_t num_items = attr_val.size();
-
-                    ret += "[";
-                    for (size_t j = 0 ; j < num_items; ++j)
-                    {
-                        ret += std::to_string(attr_val[j]);
-                        if (j < num_items-1)
-                            ret += ", ";
-                    }
-                    ret += "], ";
-                } else {
-                    TT_ASSERT(false, "Unknown alternative in Attr");
-                }
-            }
-            // ret += "(" + std::to_string(attr[0]);
-            // for (std::size_t i = 1; i < attr.size(); i++) ret += "," + std::to_string(attr[i]);
-            ret += ")";
-        }
-
-        if (named_attrs.size() > 0)
-        {
-            using tt::operator<<;
-            std::stringstream ss;
-            bool first = true;
-            ss << "{";
-            for (auto const &[name, value] : named_attrs)
-            {
-                if (not first)
-                    ss << ", ";
-                ss << name << ": " << value;
-                first = false;
-            }
-            ss << "}";
-            ret += ss.str();
-        }
-        return ret;
-    }
 };
 
 class OpNode : public TaggedNode

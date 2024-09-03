@@ -3,7 +3,6 @@
 // SPDX-License-Identifier: Apache-2.0
 #include "passes/lowering_context.hpp"
 
-#include "forge_passes.hpp"
 #include "graph_lib/node_types.hpp"
 #include "graph_lib/utils.hpp"
 #include "passes/decomposing_context.hpp"
@@ -16,6 +15,16 @@ namespace tt {
 using NodeType = graphlib::NodeType;
 using Edge = graphlib::Edge;
 using EdgeType = graphlib::EdgeType;
+
+LoweringContext::LoweringContext(
+    Graph *old_graph,
+    Graph *new_graph,
+    graphlib::PyOpNode *node,
+    NodeToNodeMap &old_to_new) :
+        old_graph(old_graph), new_graph(new_graph), node(node), old_to_new(old_to_new)
+{
+    subgraph_idx = old_graph->get_subgraph_id_for_node(node->id());
+}
 
 Node *LoweringContext::get_or_insert_node(NodeContext node) {
     Node *new_node = nullptr;

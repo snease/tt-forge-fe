@@ -42,11 +42,7 @@ public:
             Graph *old_graph, 
             Graph *new_graph, 
             graphlib::PyOpNode *node, 
-            NodeToNodeMap &old_to_new) : 
-        old_graph(old_graph), new_graph(new_graph), node(node), old_to_new(old_to_new) {
-
-            subgraph_idx = old_graph->get_subgraph_id_for_node(node->id());
-        }
+            NodeToNodeMap &old_to_new);
 
     // Op / edge creation
         NodeContext op(

@@ -2,6 +2,7 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 #include "passes/fuse_redundant_tm_sequence.hpp"
+#include "graph_lib/utils.hpp"
 
 
 using tt::LogTMFusion;

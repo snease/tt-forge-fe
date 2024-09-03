@@ -11,10 +11,10 @@
 
 #include "utils/assert.hpp"
 
-namespace tt 
+namespace tt
 {
 
-namespace graphlib 
+namespace graphlib
 {
     class Graph;
 }

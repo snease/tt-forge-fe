@@ -71,6 +71,7 @@ static runtime::Tensor create_tensor(const torch::Tensor& tensor)
 
     auto shape = std::vector<uint32_t>(tensor.sizes().begin(), tensor.sizes().end());
     auto stride = std::vector<uint32_t>(tensor.strides().begin(), tensor.strides().end());
+    log_info("Shape: {}, Stride: {}", shape, stride);
 
     return runtime::createTensor(
         data,
@@ -117,6 +118,7 @@ std::vector<torch::Tensor> run_binary(runtime::Binary &binary, int program_idx, 
     std::vector<runtime::Tensor> rt_inputs;
     for (auto const& input : inputs)
     {
+
         rt_inputs.emplace_back(create_tensor(input));
     }
 

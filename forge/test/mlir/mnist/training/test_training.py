@@ -13,7 +13,7 @@ def test_mnist_training():
 
     # Config
     num_epochs = 1
-    batch_size = 64
+    batch_size = 1
     learning_rate = 0.005
     
     # Load dataset
@@ -41,7 +41,7 @@ def test_mnist_training():
             framework_optimizer.zero_grad()
             
             # Forward pass (prediction) on device
-            pred = tt_model(data)
+            pred = tt_model(data)[2]
             
             # Compute loss on CPU
             loss = loss_fn(pred, target)

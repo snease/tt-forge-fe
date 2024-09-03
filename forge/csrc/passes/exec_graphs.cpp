@@ -7,6 +7,7 @@
 #include <utils/assert.hpp>
 #include <utils/logger.hpp>
 
+#include "forge_module.hpp"
 #include "graph_lib/defines.hpp"
 #include "graph_lib/graph.hpp"
 #include "graph_lib/node.hpp"
@@ -71,9 +72,11 @@ namespace tt::passes
         return ids;
     }
 
-    void create_execution_graphs(tt::graphlib::Graph * graph)
+    void create_execution_graphs(tt::ForgeModule& module)
     {
-        auto fwd_graph = std::make_unique<Graph>(tt::graphlib::IRLevel::IR_TT_FORGE, graph->name() + "_fwd");
+        auto graph = module.graph(GraphType::Forward);
+
+        auto fwd_graph = std::make_unique<Graph>(tt::graphlib::IRLevel::IR_TT_FORGE, "forward");
 
         for (auto node : graph->nodes_by_type(graphlib::NodeType::kPyOp))
         {
@@ -176,7 +179,7 @@ namespace tt::passes
         std::vector<bool> requires_grad(regular_output_nodes.size(), false);
         fwd_graph->register_module_outputs(regular_output_nodes, requires_grad);
 
-        auto bwd_graph = std::make_unique<Graph>(tt::graphlib::IRLevel::IR_TT_FORGE, graph->name() + "_bwd");
+        auto bwd_graph = std::make_unique<Graph>(tt::graphlib::IRLevel::IR_TT_FORGE, "backward");
 
         for (auto input_node : graph->nodes([](const Node* node) { return node->node_type() == NodeType::kInput; }))
         {
@@ -300,9 +303,9 @@ namespace tt::passes
 
         fwd_graph->dump("split_exec_graphs_fwd");
         bwd_graph->dump("split_exec_graphs_bwd");
-    
-        graph->set_execution_subgraph(graphlib::SubgraphType::Forward, std::move(fwd_graph));
-        graph->set_execution_subgraph(graphlib::SubgraphType::Backward, std::move(bwd_graph));
+
+        module.set_graph(GraphType::Forward, fwd_graph.release());
+        module.set_graph(GraphType::Backward, bwd_graph.release());
     }
 
 } // namespace tt::passes

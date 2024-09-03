@@ -129,6 +129,7 @@ class CompileContext:
     in_recompile: bool = False
     recompile_count: int = 0
     target_cycles_offset: int = 0
+    forge_module: Optional[forge._C.ForgeModule] = None
     compiled_binary: Optional[Binary] = None
 
 def calculate_grads(
@@ -610,6 +611,9 @@ def generate_initial_graph(context: CompileContext) -> CompileDepth:
             for name, value in module.named_parameters():
                 context.parameter_dict[name] = value
 
+    forge_module = forge._C.ForgeModule(context.graph_name, context.graph)
+    context.forge_module = forge_module
+
     return CompileDepth.POST_INITIAL_GRAPH_PASS
 
 def run_post_initial_graph_pass(context: CompileContext) -> CompileDepth:
@@ -834,16 +838,16 @@ def create_execution_graphs(context: CompileContext) -> CompileDepth:
     -------
     CompileDepth - next compile stage
     """
-    graph = context.graph
+    assert context.forge_module is not None
 
-    forge._C.create_execution_graphs(graph)
+    forge._C.create_execution_graphs(context.forge_module)
 
     return CompileDepth.RUN_MLIR_COMPILER
 
 def run_mlir_compiler(context: CompileContext) -> CompileDepth:
-    graph = context.graph
+    assert context.forge_module is not None
 
-    context.compiled_binary = forge._C.run_mlir_compiler(graph)
+    context.compiled_binary = forge._C.run_mlir_compiler(context.forge_module)
 
     return CompileDepth.FINISH_COMPILE
 

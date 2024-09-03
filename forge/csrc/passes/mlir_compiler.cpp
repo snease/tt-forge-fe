@@ -35,7 +35,7 @@
 namespace tt::passes
 {
     /// Public API for lowering to MLIR, running MLIR passes and generate runtime binary.
-    runtime::Binary run_mlir_compiler(tt::graphlib::Graph *graph)
+    runtime::Binary run_mlir_compiler(tt::ForgeModule& module)
     {
         // Register all the required dialects.
         mlir::DialectRegistry registry;
@@ -58,7 +58,7 @@ namespace tt::passes
         context.loadAllAvailableDialects();
 
         // Generate MLIR from the Forge graph.
-        mlir::OwningOpRef<mlir::ModuleOp> mlir_module = lower_to_mlir(graph, context);
+        mlir::OwningOpRef<mlir::ModuleOp> mlir_module = lower_to_mlir(module, context);
 
         tt::log_info(LogMLIRCompiler, "MLIR module generated successfully.");
 

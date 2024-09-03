@@ -4,6 +4,7 @@
 #pragma once
 #include <memory>
 
+#include "forge_module.hpp"
 #include "tt/runtime/types.h"
 
 namespace tt
@@ -17,5 +18,5 @@ namespace tt
 namespace tt::passes
 {
     /// Public API for running MLIR passes and generating binary.
-    runtime::Binary run_mlir_compiler(tt::graphlib::Graph *graph);
+    runtime::Binary run_mlir_compiler(tt::ForgeModule& module);
 }

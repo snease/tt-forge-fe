@@ -9,6 +9,7 @@
 #include <string>
 
 // TTForge headers
+#include "forge_module.hpp"
 #include "graph_lib/graph.hpp"
 #include "graph_lib/node.hpp"
 #include "graph_lib/utils.hpp"
@@ -56,18 +57,17 @@ class MLIRGenerator
         }
 
         /// Public API: Convert the TTForge graph into an MLIR module operation for TTIR.
-        mlir::ModuleOp emit_mlir(graphlib::Graph *graph)
+        mlir::ModuleOp emit_mlir(tt::ForgeModule& module)
         {
-            graphModule_ = mlir::ModuleOp::create(get_module_location(graph), "tt-forge-graph");
+            graphModule_ = mlir::ModuleOp::create(get_module_location(module), module.name());
             graphModule_->setAttr(mlir::tt::SystemDescAttr::name,
                       mlir::tt::SystemDescAttr::getDefault(builder_.getContext()));
             builder_.setInsertionPointToStart(&graphModule_.getBodyRegion().front());
 
-            emit_mlir_function(graph->get_execution_subgraph(tt::graphlib::SubgraphType::Forward), "forward");
-
-            if (graph->training())
+            // Emit MLIR functions for each graph in the module.
+            for (auto graph : module.graphs())
             {
-                emit_mlir_function(graph->get_execution_subgraph(tt::graphlib::SubgraphType::Backward), "backward");
+                emit_mlir_function(graph, graph->name());
             }
 
             log_info(LogMLIRCompiler, "MLIR module generated successfully.");
@@ -469,10 +469,10 @@ class MLIRGenerator
         }
 
         /// Get the location for a module.
-        mlir::Location get_module_location(tt::graphlib::Graph *graph)
+        mlir::Location get_module_location(tt::ForgeModule& module)
         {
             return mlir::FileLineColLoc::get(
-                builder_.getContext(), graph->name(), graph->id(), 0);
+                builder_.getContext(), module.name(), 0, 0);
         }
 
         /// Get the simple location for a node in a format "graph_name", (graph_id), (node_id)
@@ -525,8 +525,8 @@ class MLIRGenerator
 namespace tt::passes
 {
     /// Public API for generating MLIR from the TTForge graph.
-     mlir::OwningOpRef<mlir::ModuleOp> lower_to_mlir(graphlib::Graph * graph, mlir::MLIRContext& context)
+    mlir::OwningOpRef<mlir::ModuleOp> lower_to_mlir(tt::ForgeModule& module, mlir::MLIRContext& context)
     {
-        return MLIRGenerator(context).emit_mlir(graph);
+        return MLIRGenerator(context).emit_mlir(module);
     }
 }

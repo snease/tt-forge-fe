@@ -178,6 +178,12 @@ namespace tt::passes
         auto intermediate_output_nodes = map_to_ids(fwd_graph->nodes(is_intermediate_output_node));
         regular_output_nodes.insert(regular_output_nodes.end(), intermediate_output_nodes.begin(), intermediate_output_nodes.end());
 
+        if (!graph->training())
+        {
+            module.set_graph(GraphType::Forward, fwd_graph.release());
+            return;
+        }
+
         auto bwd_graph = std::make_unique<Graph>(tt::graphlib::IRLevel::IR_TT_FORGE, "backward");
 
         for (auto input_node : graph->nodes([](const Node* node) { return node->node_type() == NodeType::kInput; }))

@@ -244,6 +244,7 @@ class Graph
     std::vector<Node *> get_parameter_nodes() const;
     std::vector<std::string> get_constant_names() const;
     std::vector<std::string> get_ordered_input_names() const;
+    std::vector<std::string> get_ordered_constant_names() const;
     std::vector<std::string> get_ordered_intermediate_names() const;
     std::vector<std::string> get_ordered_output_names() const;
     std::vector<std::string> get_ordered_input_gradient_names() const;

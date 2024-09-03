@@ -83,6 +83,7 @@ void GraphModule(py::module &m_graph)
                 return names;
             })
         .def("get_ordered_input_names", &Graph::get_ordered_input_names)
+        .def("get_ordered_constant_names", &Graph::get_ordered_constant_names)
         .def("get_ordered_intermediate_names", &Graph::get_ordered_intermediate_names)
         .def("get_ordered_output_names", &Graph::get_ordered_output_names)
         .def("get_ordered_target_names", &Graph::get_ordered_target_names)

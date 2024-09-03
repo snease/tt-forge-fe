@@ -827,7 +827,15 @@ std::vector<std::string> Graph::get_ordered_input_names() const {
     }
     return ordered_inputs;
 }
-    
+
+std::vector<std::string> Graph::get_ordered_constant_names() const {
+    std::vector<std::string> ordered_constants;
+    for (auto input_node_id : this->ordered_module_constant_node_ids_) {
+        ordered_constants.push_back(this->node_by_id(input_node_id)->name());
+    }
+    return ordered_constants;
+}
+
 std::vector<std::string> Graph::get_ordered_target_names() const {
     std::vector<std::string> ordered_inputs;
     for (auto input_node_id : this->ordered_module_target_node_ids_) {

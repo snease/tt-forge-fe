@@ -121,7 +121,7 @@ class CompiledGraphState:
         ordered_input_subgraph_indices = graph.get_ordered_input_subgraph_indices()
         ordered_output_subgraph_indices = graph.get_ordered_output_subgraph_indices()
         ordered_target_subgraph_indices = graph.get_ordered_target_subgraph_indices()
-        ordered_constant_node_names=[constant_node.name for constant_node in graph.get_constant_nodes()]
+        ordered_constant_node_names=graph.get_ordered_constant_names()
         ordered_parameter_node_names=[parameter_node.name for parameter_node in graph.get_parameter_nodes()]
         ordered_intermediate_activation_names = [(intermediate.rstrip("_intermediate_output"), intermediate) for intermediate in graph.get_ordered_intermediate_names()]
 
@@ -263,6 +263,9 @@ class CompiledGraphState:
     def get_ordered_parameter_tensors(self):
         return [self.get_parameter_tensor(name) for name in self.ordered_parameter_node_names]
 
+    def get_ordered_constant_tensors(self):
+        return [self.get_constant_tensor(name) for name in self.ordered_constant_node_names]
+
     def get_ordered_input_names_for_subgraph(self, subgraph_idx):
         return [name for i, name in enumerate(self.ordered_input_names) if self.ordered_input_subgraph_indices[i] == subgraph_idx]
 
@@ -327,6 +330,7 @@ class CompiledModel:
             inputs_and_parameters = to_pt_tensors(inputs_and_parameters)
 
         logger.info(f"Running model {self.compiled_graph_state.graph.get_name()} on device...")
+
         outputs = run_binary(self.compiled_binary, int(ProgramId.FORWARD), inputs_and_parameters)
         
         if self.compiled_graph_state.graph.training():

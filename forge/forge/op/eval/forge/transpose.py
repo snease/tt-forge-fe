@@ -66,6 +66,7 @@ class TransposeTM(PyTM):
             )
 
     def decompose_post_optimize(self, dc, inputs):
+        return
         orig_shape = inputs[0].shape
         if (
             len(orig_shape) > 2

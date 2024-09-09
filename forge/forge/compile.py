@@ -263,6 +263,7 @@ def forge_compile_from_context(context: CompileContext) -> CompiledModel:
         CompileDepth.AUTOGRAD: run_autograd_pass,
         CompileDepth.POST_AUTOGRAD_PASS: run_post_autograd_pass,
         CompileDepth.PRE_LOWERING_PASS: run_pre_lowering_pass,
+        CompileDepth.CREATE_EXEC_GRAPHS: create_execution_graphs,
         CompileDepth.RUN_MLIR_COMPILER: run_mlir_compiler,
         CompileDepth.FINISH_COMPILE: finish_compile,
     }
@@ -829,6 +830,25 @@ def run_pre_lowering_pass(context: CompileContext) -> CompileDepth:
     dump_graph(graph, graph_name, "pre_lowering")
 
     context.final_graph = graph
+    return CompileDepth.CREATE_EXEC_GRAPHS
+
+def create_execution_graphs(context: CompileContext) -> CompileDepth:
+    """
+    Creates execution graphs.
+
+    Parameters
+    ----------
+    context: CompileContext
+        Compile context
+
+    Returns
+    -------
+    CompileDepth - next compile stage
+    """
+    assert context.forge_module is not None
+
+    forge._C.create_execution_graphs(context.forge_module)
+
     return CompileDepth.RUN_MLIR_COMPILER
 
 def run_mlir_compiler(context: CompileContext) -> CompileDepth:

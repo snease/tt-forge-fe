@@ -67,20 +67,19 @@ class MLIRGenerator
             // Emit MLIR functions for each graph in the module.
             for (auto graph : module.graphs())
             {
-                // Currently there is only one graph in the ForgeGraphModule. This will change after completion of issue #100.
-                // For now, we keep the hack for splitting the single graph into forward and backward subgraphs.
-                TT_ASSERT(module.graphs().size() == 1, "Expected only one graph in ForgeGraphModule");
+                emit_mlir_function(graph, graph->name());
+                // Create a string to store the output
+                std::string moduleStr;
+                llvm::raw_string_ostream rso(moduleStr);
 
-                {
-                    auto traversal_context = graphlib::get_subgraph_traversal_context<graphlib::SubgraphType::Forward>(graph);
-                    emit_mlir_function(graph);
-                }
+                // Print the MLIR module
+                mlir::OpPrintingFlags printFlags;
+                printFlags.enableDebugInfo();
+                graphModule_.print(rso, printFlags);
 
-                if (graph->training())
-                {
-                    auto traversal_context = graphlib::get_subgraph_traversal_context<graphlib::SubgraphType::Backward>(graph);
-                    emit_mlir_function(graph, "backward");
-                }
+                rso.flush();
+
+                log_info(LogMLIRCompiler, "MLIR module after lowering TT-Forge graph:\n{}", moduleStr);
             }
 
             /// Verify the module after we have finished constructing it, this will check
@@ -203,29 +202,21 @@ class MLIRGenerator
             }
 
             // Add the graph parameters to the argument list.
-            for(auto *parameter: graph->get_parameter_nodes())
+            for(auto *parameter: graph->ordered_module_params())
             {
-                // Check whether the parameter is actually used in the current graph context,
-                // for example when compiling model for training we will emit separate mlirs
-                // for forward and backward subgraphs (via GraphTraversalContext).
-                if (graph->data_users(parameter).empty())
-                {
-                    log_trace(LogMLIRCompiler, "Skipping parameter {} as it is not used in the current graph context.", parameter->name());
-                    continue;
-                }
-                log_trace(LogMLIRCompiler, "Adding parameter {} to the argument list.", parameter->name());
-
                 argument_nodes.push_back(parameter);
                 argument_types.push_back(get_node_type(parameter));
             }
 
+            for (auto *constant: graph->ordered_module_constants())
+            {
+                argument_nodes.push_back(constant);
+                argument_types.push_back(get_node_type(constant));
+            }
+
             // Assemble the function return values (outputs)
             llvm::SmallVector<mlir::Type> returns;
-            auto output_nodes = graph->nodes([](const graphlib::Node *node) {
-                return node->node_type() == tt::graphlib::NodeType::kOutput
-                 || (node->node_type() == tt::graphlib::NodeType::kQueue && node->as<graphlib::QueueNode>()->is_grad_accumulator());
-            });
-
+            auto output_nodes = graph->ordered_module_outputs();
             for (auto *output : output_nodes)
             {
                 log_trace(LogMLIRCompiler, "Adding output {} to the return list.", output->name());
@@ -457,14 +448,10 @@ class MLIRGenerator
             // Assemble the function return values (outputs)
             llvm::SmallVector<mlir::Value> returnValues;
 
-            auto output_nodes = graph->nodes([](const graphlib::Node *node) {
-                return node->node_type() == tt::graphlib::NodeType::kOutput
-                 || (node->node_type() == tt::graphlib::NodeType::kQueue && node->as<graphlib::QueueNode>()->is_grad_accumulator());
-            });
-
+            auto output_nodes = graph->ordered_module_outputs();
             for (auto *output : output_nodes)
             {
-                TT_ASSERT(graph->data_operands(output).size() == 1, "Output node must have exactly one operand.");
+                TT_ASSERT(graph->data_operands(output).size() == 1, "Output node " + output->name() + " must have exactly one operand.");
                 auto output_operand = graph->data_operands(output)[0];
                 auto outputValue = symbolTable_[output_operand->name()].first;
                 returnValues.push_back(outputValue);

@@ -2,6 +2,7 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
+#include "passes/exec_graphs.hpp"
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wgnu-zero-variadic-macro-arguments"
 #include <pybind11/pybind11.h>
@@ -202,6 +203,7 @@ PYBIND11_MODULE(_C, m) {
         py::arg("graph"),
         py::arg("default_df_override") = std::optional<DataFormat>{});
     m.def("run_mlir_compiler", &passes::run_mlir_compiler);
+    m.def("create_execution_graphs", &passes::create_execution_graphs);
 
     m.def(
         "dump_graph",

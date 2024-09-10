@@ -110,7 +110,6 @@ void GraphModule(py::module &m_graph)
             "register_module_outputs",
             &Graph::register_module_outputs,
             py::arg("module_outputs"),
-            py::arg("requires_grad"),
             py::arg("append") = false)
         .def("register_module_targets", &Graph::register_module_targets)
         .def("get_ordered_input_shapes", &Graph::get_ordered_input_shapes)

@@ -186,7 +186,7 @@ class MLIRGenerator
             // Add the graph inputs to the argument list.
             for (auto *input: graph->ordered_module_inputs())
             {
-                log_trace(LogMLIRCompiler, "Adding input {} to the argument list.", input->name());
+                log_info(LogMLIRCompiler, "Adding input {} to the argument list.", input->name());
 
                 argument_nodes.push_back(input);
                 argument_types.push_back(get_node_type(input));
@@ -195,23 +195,19 @@ class MLIRGenerator
             // Add the graph constants to the argument list.
             for (auto *constant : graph->get_constant_nodes())
             {
-                log_trace(LogMLIRCompiler, "Adding constant {} to the argument list.", constant->name());
+                log_info(LogMLIRCompiler, "Adding constant {} to the argument list.", constant->name());
 
                 argument_nodes.push_back(constant);
                 argument_types.push_back(get_node_type(constant));
             }
 
             // Add the graph parameters to the argument list.
-            for(auto *parameter: graph->ordered_module_params())
+            for(auto *parameter: graph->get_parameter_nodes())
             {
+                log_info(LogMLIRCompiler, "Adding parameter {} to the argument list.", parameter->name());
+
                 argument_nodes.push_back(parameter);
                 argument_types.push_back(get_node_type(parameter));
-            }
-
-            for (auto *constant: graph->ordered_module_constants())
-            {
-                argument_nodes.push_back(constant);
-                argument_types.push_back(get_node_type(constant));
             }
 
             // Assemble the function return values (outputs)
@@ -219,7 +215,7 @@ class MLIRGenerator
             auto output_nodes = graph->ordered_module_outputs();
             for (auto *output : output_nodes)
             {
-                log_trace(LogMLIRCompiler, "Adding output {} to the return list.", output->name());
+                log_info(LogMLIRCompiler, "Adding output {} to the return list.", output->name());
                 returns.push_back(get_node_type(output));
             }
 

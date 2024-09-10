@@ -227,7 +227,7 @@ graphlib::Graph* run_pre_lowering_passes(
     passes::remove_nops(graph);
 
     // Recalculate shapes before lowering to MLIR
-    recalculate_shapes(graph);
+    // recalculate_shapes(graph);
 
     return graph;
 }

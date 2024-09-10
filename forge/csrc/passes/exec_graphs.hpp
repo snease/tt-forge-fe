@@ -3,17 +3,12 @@
 // SPDX-License-Identifier: Apache-2.0
 #pragma once
 
-#include "forge_module.hpp"
-
-namespace tt::graphlib
-{
-class Graph;
-}
+#include "forge_graph_module.hpp"
 
 namespace tt::passes 
 {
     // Create execution graphs from the TT-Forge graph.
-    void create_execution_graphs(tt::ForgeModule& graph);
+    void create_execution_graphs(tt::ForgeGraphModule& graph);
 
 } // namespace tt:passes
 

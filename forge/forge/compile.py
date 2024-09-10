@@ -1222,7 +1222,7 @@ def generate_graph(
 
     graph.register_module_inputs(module_inputs)
     graph.register_module_targets(module_targets)
-    graph.register_module_outputs(module_outputs, out_requires_grad)
+    graph.register_module_outputs(module_outputs)
 
     if return_intermediate:
         return graph, outputs, intermediate, inputs, target_tensors

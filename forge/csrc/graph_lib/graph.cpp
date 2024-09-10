@@ -674,20 +674,12 @@ void Graph::copy_module_targets(Graph *old_graph, const std::unordered_map<Node 
     }
 }
 
-
-
-void Graph::register_module_outputs(const std::vector<NodeId>& module_outputs, std::vector<bool> requires_grad, bool append) {
-    TT_ASSERT(module_outputs.size() == requires_grad.size());
+void Graph::register_module_outputs(const std::vector<NodeId>& module_outputs, bool append) {
     if (!append) {
         this->ordered_module_output_node_ids_.clear();
     }
     for (NodeId module_output : module_outputs) {
         this->ordered_module_output_node_ids_.push_back(module_output);
-    }
-    for (std::size_t i=0; i < module_outputs.size(); i++)
-    {
-        OutputNode *out = node_by_id(module_outputs[i])->as<OutputNode>();
-        out->set_requires_grad(requires_grad[i]);
     }
 }
 

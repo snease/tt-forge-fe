@@ -106,6 +106,7 @@ bool needs_intermediate_output(const Graph *graph, const graphlib::Node *node)
 std::unique_ptr<Graph> split_forward(const Graph* graph, const std::vector<graphlib::Node*> &topo)
 {
     auto fwd_graph = std::make_unique<Graph>(tt::graphlib::IRLevel::IR_TT_FORGE, "forward");
+    fwd_graph->set_training(graph->training());
 
     for (auto node : topo)
     {
@@ -144,8 +145,19 @@ std::unique_ptr<Graph> split_forward(const Graph* graph, const std::vector<graph
 
     fwd_graph->register_module_inputs(fwd_module_inputs);
 
+    for (auto output : graph->ordered_module_outputs())
+    {
+        log_info("Adding node {} to outputs", output->name());
+        fwd_graph->register_module_outputs({fwd_graph->get_node_by_name(output->name())->id()}, true /* append */);
+    }
     for (auto output : fwd_graph->nodes_by_type(graphlib::NodeType::kOutput))
     {
+        if (graph->has_node_with_name(output->name()))
+        {
+            continue;
+        }
+
+        log_info("Adding node {} to outputs", output->name());
         fwd_graph->register_module_outputs({output->id()}, true /* append */);
     }
 
@@ -192,6 +204,7 @@ std::unique_ptr<Graph> split_backward(const Graph *graph, const Graph *fwd_graph
                         // Find the intermediate output node in the fwd graph
                         if (bwd_graph->has_node_with_name(user->name()))
                         {
+                            bwd_graph->add_edge(bwd_graph->get_node_by_name(user->name()), bwd_graph->get_node_by_name(node->name()));
                             continue;
                         }
 

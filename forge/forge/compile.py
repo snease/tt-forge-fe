@@ -27,7 +27,7 @@ from forge._C import (
     run_pre_lowering_passes,
     dump_graph,
 )
-from forge._C import ForgeGraphModule
+from forge._C import ForgeGraphModule, GraphType
 import forge._C.autograd as pyautograd
 import forge._C.graph as pygraph
 from forge._C.graph import Graph
@@ -303,13 +303,15 @@ def forge_compile_from_context(context: CompileContext) -> CompiledModel:
         pass_specific_output_kwargs = context.output_kwargs
     )
 
-    compiled_graph_state = CompiledGraphState.from_compiled_graph(context.modules[0], compile_results)
-
+    assert context.forge_module is not None
+    fwd_compiled_graph_state = CompiledGraphState.from_compiled_graph(context.modules[0], context.forge_module.get_graph(GraphType.Forward))
+    bwd_compiled_graph_state = CompiledGraphState.from_compiled_graph(context.modules[0], context.forge_module.get_graph(GraphType.Backward))
 
     assert context.compiled_binary is not None
 
     compiled_module = CompiledModel(
-        compiled_graph_state,
+        fwd_compiled_graph_state,
+        bwd_compiled_graph_state,
         context.compiled_binary,
         loss_module=context.loss_module,
         optimizer=context.optimizer,
@@ -861,7 +863,7 @@ def run_mlir_compiler(context: CompileContext) -> CompileDepth:
 
 def finish_compile(context: CompileContext) -> CompileDepth:
     """
-    Runs backend golden verify.
+    Doesn't do anything (for now)
 
     Parameters
     ----------
@@ -873,8 +875,6 @@ def finish_compile(context: CompileContext) -> CompileDepth:
     CompileDepth - next compile stage
     """
     verify_cfg = context.verify_cfg
-
-    context.output_kwargs["consteval_trace"] = pygraph.record_consteval_operations(context.final_graph)
 
     return CompileDepth.FULL
 

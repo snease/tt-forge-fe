@@ -41,16 +41,21 @@ def test_mnist_training():
             framework_optimizer.zero_grad()
             
             # Forward pass (prediction) on device
-            pred = tt_model(data)[2]
+            pred = tt_model(data)[0]
             
+            print(pred)
+            print(target)
             # Compute loss on CPU
             loss = loss_fn(pred, target)
+            print(f"loss = {loss}")
             
             # RUn backward pass on device
-            # loss.backward()
+            loss.backward()
             
+            grad = tt_model.backward(pred.grad)
+
             # Adjust weights (on device)
-            # framework_optimizer.step()
+            framework_optimizer.step()
 
             # Log gradients
             # for name, param in tt_model.named_parameters():

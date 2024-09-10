@@ -9,8 +9,9 @@ from loguru import logger
 from dataclasses import dataclass, field
 from dataclasses_json import dataclass_json, config
 
-from forge._C import DataFormat
+from forge._C import DataFormat, ForgeGraphModule, GraphType
 from forge._C.graph import Graph, RuntimeTensorTransform
+import forge._C.graph as pygraph
 from forge._C.runtime import run_binary, Binary
 from forge.utils import list_as_json
 from forge.tensor import Tensor, get_post_const_eval_tensors, to_pt_tensors
@@ -75,15 +76,6 @@ class CompiledGraphState:
     parameter_to_tile_dims: Dict[str, Tuple[int, int]]
     constant_to_tile_dims: Dict[str, Tuple[int, int]]
 
-    # attributes derived based on initial graph
-    ordered_input_requires_grad: List[bool]
-    ordered_output_requires_grad: List[bool]
-    ordered_input_shapes: List[List[int]]
-    ordered_output_shapes: List[List[int]]
-    ordered_target_shapes: List[List[int]]
-    ordered_intermediate_shapes: List[List[int]]
-    ordered_output_data_formats: List[DataFormat] = field(metadata=list_as_json(DataFormat))
-
     consteval_trace: Dict[str, Dict[str, Any]]
     post_const_eval_constants: Dict[str, torch.Tensor] = field(
         metadata=config( # For serialization of CompiledGraphState cls
@@ -111,8 +103,7 @@ class CompiledGraphState:
     has_cache_buffers: bool = False
 
     @staticmethod
-    def from_compiled_graph(module: Module, compile_results: CompileResults) -> "CompiledGraphState":
-        graph = compile_results.final_graph
+    def from_compiled_graph(module: Module, graph: Graph) -> "CompiledGraphState":
         ordered_input_names = graph.get_ordered_input_names()
         ordered_output_names = graph.get_ordered_output_names()
         ordered_input_gradient_names = graph.get_ordered_input_gradient_names()
@@ -151,19 +142,6 @@ class CompiledGraphState:
         assert len(ordered_input_runtime_tensor_transforms) == len(ordered_input_names)
         assert len(ordered_output_runtime_tensor_transforms) == len(ordered_output_names)
 
-        ordered_input_requires_grad = compile_results.initial_graph.get_ordered_input_requires_grad()
-        ordered_output_requires_grad = compile_results.initial_graph.get_ordered_output_requires_grad()
-        ordered_input_shapes = compile_results.initial_graph.get_ordered_input_shapes()
-        if graph.output_node_redirected():
-            ordered_output_shapes = graph.get_ordered_output_shapes()
-        else:
-            ordered_output_shapes = compile_results.initial_graph.get_ordered_output_shapes()
-        ordered_target_shapes = compile_results.initial_graph.get_ordered_target_shapes()
-        ordered_intermediate_shapes = graph.get_ordered_intermediate_shapes()
-
-        # Fetching this off the output tensors, but we could also just fetch from graph
-        ordered_output_data_formats = [output_tensor.data_format for output_tensor in compile_results.outputs]
-
         constant_to_tensor = {}
         for name, tensor in graph.get_constant_input_runtime_tensor_transform_constants():
             constant_to_tensor[name] = tensor
@@ -171,7 +149,7 @@ class CompiledGraphState:
         # TODO: will be needed for training
         optimizer_param_info = {}
 
-        consteval_trace = compile_results.pass_specific_output_kwargs["consteval_trace"]
+        consteval_trace = pygraph.record_consteval_operations(graph)
         has_cache_buffers = False
 
         if isinstance(module, Module):
@@ -219,13 +197,6 @@ class CompiledGraphState:
             ordered_bw_input_tile_broadcast_dims=ordered_bw_input_tile_broadcast_dims,
             ordered_input_runtime_tensor_transforms=ordered_input_runtime_tensor_transforms,
             ordered_output_runtime_tensor_transforms=ordered_output_runtime_tensor_transforms,
-            ordered_input_requires_grad=ordered_input_requires_grad,
-            ordered_output_requires_grad=ordered_output_requires_grad,
-            ordered_input_shapes=ordered_input_shapes,
-            ordered_output_shapes=ordered_output_shapes,
-            ordered_target_shapes=ordered_target_shapes,
-            ordered_intermediate_shapes=ordered_intermediate_shapes,
-            ordered_output_data_formats=ordered_output_data_formats,
             consteval_trace=consteval_trace,
             optimizer_param_info=optimizer_param_info,
             ordered_input_subgraph_indices=ordered_input_subgraph_indices,
@@ -293,14 +264,16 @@ class CompiledModel:
     """
     Callable object for running inference on the compiled model.
     """
-    compiled_graph_state: CompiledGraphState
+    fwd_compiled_graph_state: CompiledGraphState
+    bwd_compiled_graph_state: CompiledGraphState
     compiled_binary: Binary
     inputs: List[torch.Tensor]
     loss_module: Optional[Module]
     optimizer: Optional[torch.optim.Optimizer]
 
-    def __init__(self, compiled_graph_state: CompiledGraphState, compiled_binary: Binary, loss_module: Optional[Module] = None, optimizer: Optional[torch.optim.Optimizer] = None):
-        self.compiled_graph_state = compiled_graph_state
+    def __init__(self, fwd_compiled_graph_state: CompiledGraphState, bwd_compiled_graph_state: CompiledGraphState, compiled_binary: Binary, loss_module: Optional[Module] = None, optimizer: Optional[torch.optim.Optimizer] = None):
+        self.fwd_compiled_graph_state = fwd_compiled_graph_state
+        self.bwd_compiled_graph_state = bwd_compiled_graph_state
         self.compiled_binary = compiled_binary
         self.inputs = []
         self.loss_module = loss_module
@@ -321,16 +294,19 @@ class CompiledModel:
             Output tensors
         """
         self.inputs = [*inputs]
-        inputs_and_parameters = [*inputs, *self.compiled_graph_state.get_ordered_constant_tensors(), *self.compiled_graph_state.get_ordered_parameter_tensors()]
+        inputs_and_parameters = [*inputs, *self.fwd_compiled_graph_state.get_ordered_constant_tensors(), *self.fwd_compiled_graph_state.get_ordered_parameter_tensors()]
 
         if any([not isinstance(t, torch.Tensor) for t in inputs_and_parameters]):
             logger.info("Converting inputs and parameters to PyTorch tensors...")
             inputs_and_parameters = to_pt_tensors(inputs_and_parameters)
 
-        logger.info(f"Running model {self.compiled_graph_state.graph.get_name()} on device...")
+        logger.info(f"Running model {self.fwd_compiled_graph_state.graph.get_name()} on device...")
         outputs = run_binary(self.compiled_binary, int(ProgramId.FORWARD), inputs_and_parameters)
+
+        self.intermediates = outputs
+        outputs = [outputs[0]]
         
-        if self.compiled_graph_state.graph.training():
+        if self.fwd_compiled_graph_state.graph.training():
             # For executing loss and its backward graph on CPU, we need to tell torch to compute gradients
             for output in outputs:
                 output.requires_grad = True
@@ -341,9 +317,20 @@ class CompiledModel:
         return self(inputs)
 
     def backward(self, loss_grad: torch.Tensor) -> List[torch.Tensor]:
-        assert self.compiled_graph_state.graph.training(), "Model not compiled for training."
+        assert self.fwd_compiled_graph_state.graph.training(), "Model not compiled for training."
+        consts_and_params = [*self.bwd_compiled_graph_state.get_ordered_constant_tensors(), *self.bwd_compiled_graph_state.get_ordered_parameter_tensors()]
+        print(len(consts_and_params))
+        for constant_names in self.bwd_compiled_graph_state.ordered_constant_node_names:
+            print(f"{constant_names} shape: {self.bwd_compiled_graph_state.get_constant_tensor(constant_names).shape}")
 
-        logger.info(f"Running backward pass on model {self.compiled_graph_state.graph.get_name()} on device...")
-        grads = run_binary(self.compiled_binary, int(ProgramId.BACKWARD), self.inputs + [loss_grad])
+        for param in self.bwd_compiled_graph_state.ordered_parameter_node_names:
+            print(f"{param} = {self.bwd_compiled_graph_state.get_parameter_tensor(param).shape}")
+
+        print(len(self.intermediates))
+        print(len(self.inputs))
+        print(len(loss_grad))
+
+        logger.info(f"Running backward pass on model {self.bwd_compiled_graph_state.graph.get_name()} on device...")
+        grads = run_binary(self.compiled_binary, int(ProgramId.BACKWARD), [*loss_grad, *self.intermediates, *self.inputs, *consts_and_params])
         return grads
 

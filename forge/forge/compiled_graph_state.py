@@ -302,9 +302,6 @@ class CompiledModel:
                 self.fwd_compiled_graph_state.post_const_eval_parameters[name] = param
 
         inputs_and_parameters = [*inputs, *self.fwd_compiled_graph_state.get_ordered_constant_tensors(), *self.fwd_compiled_graph_state.get_ordered_parameter_tensors()]
-        print(f"Printing inputs and parameters: ")
-        for inp in inputs_and_parameters:
-            print(inp)
 
         if any([not isinstance(t, torch.Tensor) for t in inputs_and_parameters]):
             logger.info("Converting inputs and parameters to PyTorch tensors...")

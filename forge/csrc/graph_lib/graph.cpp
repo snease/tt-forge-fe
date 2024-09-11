@@ -698,6 +698,15 @@ void Graph::copy_module_outputs(Graph *old_graph, const std::unordered_map<Node 
     }
 }
 
+void Graph::register_module_intermediates(const std::vector<NodeId>& module_intermediates, bool append) {
+    if (!append) {
+        this->ordered_module_intermediate_node_ids_.clear();
+    }
+    for (NodeId module_intermediate : module_intermediates) {
+        this->ordered_module_intermediate_node_ids_.push_back(module_intermediate);
+    }
+}
+
 std::ostream &operator<<(std::ostream &out, const Edge &e) {
     out << "(" << e.producer_node_id << "@" << e.producer_output_port_id << " -> " << e.consumer_node_id << "@"
         << e.consumer_input_port_id << ")";
@@ -792,16 +801,10 @@ std::vector<std::string> Graph::get_ordered_input_gradient_names() const {
 std::vector<std::string> Graph::get_ordered_intermediate_names() const
 {
     std::vector<std::string> ordered_intermediate_names;
-    for (Node* node : this->nodes())
-    {
-        if (node->node_type() == NodeType::kOutput)
-        {
-            if (node->as<OutputNode>()->is_saved_intermediate())
-            {
-                ordered_intermediate_names.push_back(node->name());
-            }
-        }
+    for (auto intermediate_node_id : this->ordered_module_intermediate_node_ids_) {
+        ordered_intermediate_names.push_back(this->node_by_id(intermediate_node_id)->name());
     }
+
     return ordered_intermediate_names;
 }
 
@@ -925,6 +928,15 @@ std::vector<Node *> Graph::ordered_module_outputs() const {
         ordered_outputs.push_back(this->node_by_id(output_node_id));
     }
     return ordered_outputs;
+}
+
+// Return intermediates of the graph
+std::vector<Node *> Graph::ordered_module_intermediates() const {
+    std::vector<Node*> ordered_intermediates;
+    for (auto intermediate_node_id : this->ordered_module_intermediate_node_ids_) {
+        ordered_intermediates.push_back(this->node_by_id(intermediate_node_id));
+    }
+    return ordered_intermediates;
 }
 
 std::vector<unsigned int> Graph::get_ordered_output_subgraph_indices() const {

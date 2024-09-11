@@ -1576,7 +1576,7 @@ bool tms_support_kernel_broadcast(
 // Calculate node shape from operand shapes, using python callback
 void calculate_and_set_node_shape(Graph *graph, Node *node)
 {
-    log_trace(LogGraphCompiler, "Calculate and set node shape for: {} {}", node->name(), node->get_type());
+    log_info(LogGraphCompiler, "Calculate and set node shape for: {} {}", node->name(), node->get_type());
     // Apply TMs and get post-TM operand shapes
     std::vector<Shape> operand_shapes;
 
@@ -1598,9 +1598,9 @@ void calculate_and_set_node_shape(Graph *graph, Node *node)
                 get_op_shape(tm, shapes, graph->get_ir_level() == IRLevel::IR_FORGE, operand_shape.get_tile_dim());
             operand_shape = std::get<0>(shape_data);
             TT_ASSERT(std::get<1>(shape_data).size() == 0, "TMs should not cause broadcasts");
-            log_trace(LogGraphCompiler, "    TM {} {}", tm.as_string(), operand_shape);
+            log_info(LogGraphCompiler, "    TM {} {}", tm.as_string(), operand_shape);
         }
-        log_trace(
+        log_info(
             LogGraphCompiler,
             "  Operand[{}] {} {}",
             e.consumer_input_port_id,
@@ -1628,7 +1628,7 @@ void calculate_and_set_node_shape(Graph *graph, Node *node)
     std::tuple<Shape, std::vector<DimBroadcast>> shape_data =
         get_op_shape(op_type, operand_shapes, graph->get_ir_level() == IRLevel::IR_FORGE, node->shape().get_tile_dim());
 
-    log_trace(LogGraphCompiler, "  {}", std::get<0>(shape_data));
+    log_info(LogGraphCompiler, "  {}", std::get<0>(shape_data));
     node->set_shape(std::get<0>(shape_data));
 
     // Set broadcast attributes on edges
@@ -1636,7 +1636,7 @@ void calculate_and_set_node_shape(Graph *graph, Node *node)
     {
         for (DimBroadcast &b : std::get<1>(shape_data))
         {
-            log_trace(LogGraphCompiler, "  brcst {} {} {}", std::get<0>(b), std::get<1>(b), std::get<2>(b));
+            log_info(LogGraphCompiler, "  brcst {} {} {}", std::get<0>(b), std::get<1>(b), std::get<2>(b));
 
             int operand = std::get<0>(b);
             if (operand == (int)e.consumer_input_port_id)

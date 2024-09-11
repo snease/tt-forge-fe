@@ -150,6 +150,8 @@ std::unique_ptr<Graph> split_forward(const Graph* graph, const std::vector<graph
         log_info("Adding node {} to outputs", output->name());
         fwd_graph->register_module_outputs({fwd_graph->get_node_by_name(output->name())->id()}, true /* append */);
     }
+
+    std::vector<graphlib::NodeId> fwd_module_intermediates;
     for (auto output : fwd_graph->nodes_by_type(graphlib::NodeType::kOutput))
     {
         if (graph->has_node_with_name(output->name()))
@@ -157,9 +159,20 @@ std::unique_ptr<Graph> split_forward(const Graph* graph, const std::vector<graph
             continue;
         }
 
-        log_info("Adding node {} to outputs", output->name());
-        fwd_graph->register_module_outputs({output->id()}, true /* append */);
+        if (output->as<graphlib::OutputNode>()->is_intermediate())
+        {
+            log_info("Adding node {} to intermediate outputs", output->name());
+            fwd_module_intermediates.push_back(output->id());
+        }
+        else
+        {
+            log_info("Adding node {} to outputs", output->name());
+            fwd_graph->register_module_outputs({output->id()}, true /* append */);
+        }
     }
+
+    fwd_graph->register_module_intermediates(fwd_module_intermediates);
+    fwd_graph->register_module_outputs(fwd_module_intermediates, true /* append */);
 
     return fwd_graph;
 }
@@ -228,6 +241,7 @@ std::unique_ptr<Graph> split_backward(const Graph *graph, const Graph *fwd_graph
                 auto operand = graph->data_operands(queue_node)[0];
                 auto output_node = graphlib::create_node<graphlib::OutputNode>(queue_node->name() + "_grad_accumulator");
                 output_node->set_shape(queue_node->shape());
+                log_info("Setting shape of {} output node to {}", output_node->name(), queue_node->shape());
                 output_node->set_output_df(queue_node->output_df());
                 auto grad_out = bwd_graph->add_node(std::move(output_node), 0 /*subgraph_id=*/);
 
@@ -246,6 +260,15 @@ std::unique_ptr<Graph> split_backward(const Graph *graph, const Graph *fwd_graph
         }
     }
 
+    for (auto input: fwd_graph->ordered_module_outputs())
+    {
+        if (bwd_graph->has_node_with_name(input->name()))
+        {
+            bwd_module_inputs.push_back(bwd_graph->get_node_by_name(input->name())->id());
+        }
+
+    }
+
     for (auto bwd_input : bwd_graph->nodes_by_type(graphlib::NodeType::kInput))
     {
         if (is_loss_input_node(bwd_input) || graphlib::is_constant_input(bwd_input) || is_parameter_node(bwd_input))
@@ -253,8 +276,22 @@ std::unique_ptr<Graph> split_backward(const Graph *graph, const Graph *fwd_graph
             continue;
         }
 
+        if (std::find(bwd_module_inputs.begin(), bwd_module_inputs.end(), bwd_input->id()) != bwd_module_inputs.end())
+        {
+            continue;
+        }
+
         bwd_module_inputs.push_back(bwd_input->id());
     }
+
+    std::vector<graphlib::NodeId> bwd_module_intermediates;
+    for (auto intermediate : fwd_graph->ordered_module_intermediates())
+    {
+        TT_ASSERT(bwd_graph->has_node_with_name(intermediate->name()), "Intermediate node not found in bwd graph");
+        bwd_module_intermediates.push_back(bwd_graph->get_node_by_name(intermediate->name())->id());
+    }
+
+    bwd_graph->register_module_intermediates(bwd_module_intermediates);
     bwd_graph->register_module_inputs(bwd_module_inputs);
 
     std::vector<graphlib::NodeId> bwd_module_outputs;

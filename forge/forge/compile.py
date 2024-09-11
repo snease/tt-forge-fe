@@ -315,6 +315,7 @@ def forge_compile_from_context(context: CompileContext) -> CompiledModel:
         fwd_compiled_graph_state,
         bwd_compiled_graph_state,
         context.compiled_binary,
+        context.modules[0],
         loss_module=context.loss_module,
         optimizer=context.optimizer,
     )

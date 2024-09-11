@@ -16,7 +16,7 @@ from forge._C.runtime import run_binary, Binary
 from forge.utils import list_as_json
 from forge.tensor import Tensor, get_post_const_eval_tensors, to_pt_tensors
 from forge.module import Module
-from forge.typing import AnyTensor
+from forge.typing import AnyTensor, AnyModule
 
 
 import torch
@@ -56,7 +56,7 @@ class CompiledGraphState:
     ordered_target_names: List[str]
     ordered_constant_node_names: List[str]
     ordered_parameter_node_names: List[str]
-    ordered_intermediate_activation_names: List[Tuple[str,str]]
+    ordered_intermediate_names: List[str]
     ordered_input_subgraph_indices: List[int]
     ordered_output_subgraph_indices: List[int]
     ordered_target_subgraph_indices: List[int]
@@ -109,12 +109,12 @@ class CompiledGraphState:
         ordered_input_gradient_names = graph.get_ordered_input_gradient_names()
         ordered_output_gradient_names = graph.get_ordered_output_gradient_names()
         ordered_target_names = graph.get_ordered_target_names()
+        ordered_intermediate_names = graph.get_ordered_intermediate_names()
         ordered_input_subgraph_indices = graph.get_ordered_input_subgraph_indices()
         ordered_output_subgraph_indices = graph.get_ordered_output_subgraph_indices()
         ordered_target_subgraph_indices = graph.get_ordered_target_subgraph_indices()
         ordered_constant_node_names=[constant_node.name for constant_node in graph.get_constant_nodes()]
         ordered_parameter_node_names=[parameter_node.name for parameter_node in graph.get_parameter_nodes()]
-        ordered_intermediate_activation_names = [(intermediate.rstrip("_intermediate_output"), intermediate) for intermediate in graph.get_ordered_intermediate_names()]
 
         ordered_input_tile_broadcast_dims = [graph.get_tile_broadcast_dims_for_input(i) for i in range(len(ordered_input_names))]
         ordered_target_tile_broadcast_dims = [graph.get_tile_broadcast_dims_for_target(i) for i in range(len(ordered_target_names))]
@@ -191,7 +191,7 @@ class CompiledGraphState:
             ordered_target_names=ordered_target_names,
             ordered_constant_node_names=ordered_constant_node_names,
             ordered_parameter_node_names=ordered_parameter_node_names,
-            ordered_intermediate_activation_names=ordered_intermediate_activation_names,
+            ordered_intermediate_names=ordered_intermediate_names,
             ordered_input_tile_broadcast_dims=ordered_input_tile_broadcast_dims,
             ordered_target_tile_broadcast_dims=ordered_target_tile_broadcast_dims,
             ordered_bw_input_tile_broadcast_dims=ordered_bw_input_tile_broadcast_dims,
@@ -268,14 +268,16 @@ class CompiledModel:
     bwd_compiled_graph_state: CompiledGraphState
     compiled_binary: Binary
     inputs: List[torch.Tensor]
+    framework_module: AnyModule
     loss_module: Optional[Module]
     optimizer: Optional[torch.optim.Optimizer]
 
-    def __init__(self, fwd_compiled_graph_state: CompiledGraphState, bwd_compiled_graph_state: CompiledGraphState, compiled_binary: Binary, loss_module: Optional[Module] = None, optimizer: Optional[torch.optim.Optimizer] = None):
+    def __init__(self, fwd_compiled_graph_state: CompiledGraphState, bwd_compiled_graph_state: CompiledGraphState, compiled_binary: Binary, framework_module: AnyModule, loss_module: Optional[Module] = None, optimizer: Optional[torch.optim.Optimizer] = None):
         self.fwd_compiled_graph_state = fwd_compiled_graph_state
         self.bwd_compiled_graph_state = bwd_compiled_graph_state
         self.compiled_binary = compiled_binary
         self.inputs = []
+        self.framework_module = framework_module
         self.loss_module = loss_module
         self.optimizer = optimizer
 
@@ -294,43 +296,74 @@ class CompiledModel:
             Output tensors
         """
         self.inputs = [*inputs]
+        if self.fwd_compiled_graph_state.graph.training():
+            logger.info("Updating parameter values!")
+            for name, param in self.framework_module.module.named_parameters():
+                self.fwd_compiled_graph_state.post_const_eval_parameters[name] = param
+
         inputs_and_parameters = [*inputs, *self.fwd_compiled_graph_state.get_ordered_constant_tensors(), *self.fwd_compiled_graph_state.get_ordered_parameter_tensors()]
+        print(f"Printing inputs and parameters: ")
+        for inp in inputs_and_parameters:
+            print(inp)
 
         if any([not isinstance(t, torch.Tensor) for t in inputs_and_parameters]):
             logger.info("Converting inputs and parameters to PyTorch tensors...")
             inputs_and_parameters = to_pt_tensors(inputs_and_parameters)
 
         logger.info(f"Running model {self.fwd_compiled_graph_state.graph.get_name()} on device...")
-        outputs = run_binary(self.compiled_binary, int(ProgramId.FORWARD), inputs_and_parameters)
+        model_outputs = run_binary(self.compiled_binary, int(ProgramId.FORWARD), inputs_and_parameters)
 
-        self.intermediates = outputs
-        outputs = [outputs[0]]
+        self.intermediates = {}
+        for idx, intermediate in enumerate(self.fwd_compiled_graph_state.ordered_intermediate_names):
+            self.intermediates[intermediate] = model_outputs[idx + 1]
+        self.outputs = {}
+        self.outputs[self.fwd_compiled_graph_state.ordered_output_names[0]] = model_outputs[0]
+
+        model_outputs = [model_outputs[0]]
         
         if self.fwd_compiled_graph_state.graph.training():
             # For executing loss and its backward graph on CPU, we need to tell torch to compute gradients
-            for output in outputs:
+            for output in model_outputs:
                 output.requires_grad = True
 
-        return outputs
+        return model_outputs
 
     def forward(self, *inputs: AnyTensor) -> List[torch.Tensor]:
         return self(inputs)
 
     def backward(self, loss_grad: torch.Tensor) -> List[torch.Tensor]:
+        if self.fwd_compiled_graph_state.graph.training():
+            for name, param in self.framework_module.module.named_parameters():
+                if name in self.bwd_compiled_graph_state.ordered_parameter_node_names:
+                    self.bwd_compiled_graph_state.post_const_eval_parameters[name] = param
+
         assert self.fwd_compiled_graph_state.graph.training(), "Model not compiled for training."
         consts_and_params = [*self.bwd_compiled_graph_state.get_ordered_constant_tensors(), *self.bwd_compiled_graph_state.get_ordered_parameter_tensors()]
-        print(len(consts_and_params))
-        for constant_names in self.bwd_compiled_graph_state.ordered_constant_node_names:
-            print(f"{constant_names} shape: {self.bwd_compiled_graph_state.get_constant_tensor(constant_names).shape}")
 
-        for param in self.bwd_compiled_graph_state.ordered_parameter_node_names:
-            print(f"{param} = {self.bwd_compiled_graph_state.get_parameter_tensor(param).shape}")
+        intermediates = []
+        if self.fwd_compiled_graph_state.ordered_output_names[0] in self.bwd_compiled_graph_state.ordered_input_names:
+            intermediates.append(self.outputs[self.fwd_compiled_graph_state.ordered_output_names[0]])
+            
+        for intermediate in self.bwd_compiled_graph_state.ordered_intermediate_names:
+            intermediates.append(self.intermediates[intermediate])
 
-        print(len(self.intermediates))
-        print(len(self.inputs))
-        print(len(loss_grad))
+        # Check if loss_grad is not a list
+        if not isinstance(loss_grad, list):
+            loss_grad = [loss_grad]
 
         logger.info(f"Running backward pass on model {self.bwd_compiled_graph_state.graph.get_name()} on device...")
-        grads = run_binary(self.compiled_binary, int(ProgramId.BACKWARD), [*loss_grad, *self.intermediates, *self.inputs, *consts_and_params])
+        grads = run_binary(self.compiled_binary, int(ProgramId.BACKWARD), [*loss_grad, *intermediates, *self.inputs, *consts_and_params])
+
+        for name, param in self.framework_module.module.named_parameters():
+            for idx, grad in enumerate(self.bwd_compiled_graph_state.ordered_output_names):
+                if name in grad:
+                    if (param.shape != grads[idx].shape):
+                        grads[idx] = grads[idx].reshape(param.shape)
+
+                    if param.grad is not None:
+                        param.grad += grads[idx]
+                    else:
+                        param.grad = grads[idx]
+            
         return grads
 

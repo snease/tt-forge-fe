@@ -23,11 +23,9 @@ def test_vit_patch_embedding():
 
     # Sanity run
     cpu_output = framework_model(input_tensor)
-    print(cpu_output.shape)
 
     # Compile the model
     compiled_model = forge.compile(framework_model, input_tensor)
 
     # Run inference
     output = compiled_model(input_tensor)
-    print(output.shape)

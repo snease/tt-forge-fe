@@ -13,6 +13,7 @@ def test_vit_inference_hf():
         ViTForImageClassification.from_pretrained, "google/vit-base-patch16-224"
     )
     framework_model.eval()
+    import pdb; pdb.set_trace()
     
     # Prepare input tensor
     input_tensor = torch.rand((1, 3, 224, 224))

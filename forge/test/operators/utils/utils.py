@@ -14,7 +14,7 @@ import pytest
 from enum import Enum
 from dataclasses import dataclass
 from loguru import logger
-from typing import Optional, List, Dict, Type, Union
+from typing import Optional, List, Dict, Type, Union, Tuple
 
 from forge import ForgeModule, Module, VerifyConfig
 from forge.op_repo import TensorShape

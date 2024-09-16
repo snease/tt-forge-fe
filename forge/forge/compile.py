@@ -268,8 +268,6 @@ def forge_compile_from_context(context: CompileContext) -> CompiledModel:
         CompileDepth.FINISH_COMPILE: finish_compile,
     }
 
-    context.compiler_cfg.enable_consteval = False
-
     while context.stage != CompileDepth.FULL:
         logger.info("Running compile stage {}", context.stage.name.lower())
 

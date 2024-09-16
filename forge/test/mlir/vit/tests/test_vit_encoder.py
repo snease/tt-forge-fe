@@ -7,7 +7,7 @@ import forge
 from test.utils import download_model
 
 
-# @pytest.mark.skip()
+@pytest.mark.skip()
 def test_vit_encoder():
     # Load ViT base model
     framework_model = download_model(

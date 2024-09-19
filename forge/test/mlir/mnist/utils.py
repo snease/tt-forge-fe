@@ -16,21 +16,15 @@ from torchvision.datasets import MNIST as mnist_dataset
 class MNISTLinear(nn.Module):
     def __init__(self, input_size=784, output_size=10, hidden_size=256):
         super(MNISTLinear, self).__init__()
-
-        self.p1 = nn.Parameter(torch.rand(input_size, hidden_size))
-        nn.init.xavier_uniform_(self.p1)
-        self.bias1 = nn.Parameter(torch.zeros(hidden_size))
-        self.p2 = nn.Parameter(torch.rand(hidden_size, output_size))
-        self.bias2 = nn.Parameter(torch.zeros(output_size))
-        nn.init.xavier_uniform_(self.p2)
+        self.l1 = nn.Linear(input_size, hidden_size)
         self.relu = nn.ReLU()
+        self.l2 = nn.Linear(hidden_size, output_size)
 
     def forward(self, x):
-        x = torch.matmul(x, self.p1)
-        x = x + self.bias1
+        x = self.l1(x)
         x = self.relu(x)
-        x = torch.matmul(x, self.p2)
-        x = x + self.bias2
+        x = self.l2(x)
+
         return nn.functional.softmax(x)
 
 

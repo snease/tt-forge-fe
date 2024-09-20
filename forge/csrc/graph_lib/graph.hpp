@@ -228,7 +228,6 @@ class Graph
     void register_module_inputs(const std::vector<NodeId> &module_inputs, bool append = false);
     void register_module_outputs(const std::vector<NodeId> &module_outputs, bool append = false);
     void register_module_targets(const std::vector<NodeId> &module_targets);
-    void register_module_intermediates(const std::vector<NodeId> &module_intermediates, bool append = false);
     void copy_module_inputs(Graph *old_graph, const std::unordered_map<Node *, Node *> &old_to_new);
     void copy_module_outputs(Graph *old_graph, const std::unordered_map<Node *, Node *> &old_to_new);
     void copy_module_targets(Graph *old_graph, const std::unordered_map<Node *, Node *> &old_to_new);
@@ -248,8 +247,8 @@ class Graph
     // Return inputs to the graph in order they were added
     std::vector<Node *> ordered_module_inputs() const;
     std::vector<Node *> ordered_module_outputs() const;
-    std::vector<Node *> ordered_module_intermediates() const;
     std::vector<Node *> ordered_partial_datacopy_outputs() const;
+    std::vector<Node *> ordered_intermediates() const;
     std::vector<Node *> get_constant_nodes(bool recurse = false) const;
     std::vector<Node *> get_parameter_nodes() const;
     std::vector<std::string> get_constant_names() const;

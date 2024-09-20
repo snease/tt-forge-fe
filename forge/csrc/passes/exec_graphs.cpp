@@ -171,7 +171,6 @@ std::unique_ptr<Graph> split_forward(const Graph* graph, const std::vector<graph
         }
     }
 
-    fwd_graph->register_module_intermediates(fwd_module_intermediates);
     fwd_graph->register_module_outputs(fwd_module_intermediates, true /* append */);
 
     return fwd_graph;
@@ -180,6 +179,18 @@ std::unique_ptr<Graph> split_forward(const Graph* graph, const std::vector<graph
 std::unique_ptr<Graph> split_backward(const Graph *graph, const Graph *fwd_graph, const std::vector<graphlib::Node*> &topo)
 {
     auto bwd_graph = std::make_unique<Graph>(tt::graphlib::IRLevel::IR_TT_FORGE, "backward");
+
+    // Adding all the intermediate outputs from the forward graph as inputs to the backward graph.
+    // Order is important, so we add them in the order they were added to the forward graph.
+    for (auto intermediate_output : fwd_graph->ordered_intermediates())
+    {
+        log_info("Adding intermediate output {} as input to backward graph", intermediate_output->name());
+        auto intermediate_output_node = graphlib::create_node<graphlib::InputNode>(intermediate_output->name(), graphlib::InputNodeType::Activation, false);
+        intermediate_output_node->set_shape(intermediate_output->shape());
+        intermediate_output_node->set_output_df(intermediate_output->output_df());
+
+        bwd_graph->add_node(std::move(intermediate_output_node), 0 /*subgraph_id=*/);
+    }
 
     for (auto node : topo)
     {
@@ -284,14 +295,6 @@ std::unique_ptr<Graph> split_backward(const Graph *graph, const Graph *fwd_graph
         bwd_module_inputs.push_back(bwd_input->id());
     }
 
-    std::vector<graphlib::NodeId> bwd_module_intermediates;
-    for (auto intermediate : fwd_graph->ordered_module_intermediates())
-    {
-        TT_ASSERT(bwd_graph->has_node_with_name(intermediate->name()), "Intermediate node not found in bwd graph");
-        bwd_module_intermediates.push_back(bwd_graph->get_node_by_name(intermediate->name())->id());
-    }
-
-    bwd_graph->register_module_intermediates(bwd_module_intermediates);
     bwd_graph->register_module_inputs(bwd_module_inputs);
 
     std::vector<graphlib::NodeId> bwd_module_outputs;

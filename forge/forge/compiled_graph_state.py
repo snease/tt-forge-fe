@@ -340,8 +340,8 @@ class CompiledModel:
         intermediates = []
         if self.fwd_compiled_graph_state.ordered_output_names[0] in self.bwd_compiled_graph_state.ordered_input_names:
             intermediates.append(self.outputs[self.fwd_compiled_graph_state.ordered_output_names[0]])
-            
-        for intermediate in self.bwd_compiled_graph_state.ordered_intermediate_names:
+
+        for intermediate in self.fwd_compiled_graph_state.ordered_intermediate_names:
             intermediates.append(self.intermediates[intermediate])
 
         # Check if loss_grad is not a list

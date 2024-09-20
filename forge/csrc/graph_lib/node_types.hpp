@@ -274,6 +274,7 @@ protected:
         requires_grad_(false),
         is_loss_output_(false),
         is_saved_intermediate_(false),
+        is_intermediate_(false),
         untilize_(true)
     {
     }

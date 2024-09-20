@@ -296,11 +296,6 @@ class CompiledModel:
             Output tensors
         """
         self.inputs = [*inputs]
-        if self.fwd_compiled_graph_state.graph.training():
-            logger.info("Updating parameter values!")
-            for name, param in self.framework_module.module.named_parameters():
-                self.fwd_compiled_graph_state.post_const_eval_parameters[name] = param
-
         inputs_and_parameters = [*inputs, *self.fwd_compiled_graph_state.get_ordered_constant_tensors(), *self.fwd_compiled_graph_state.get_ordered_parameter_tensors()]
 
         if any([not isinstance(t, torch.Tensor) for t in inputs_and_parameters]):
@@ -319,7 +314,7 @@ class CompiledModel:
         model_outputs = [model_outputs[0]]
         
         if self.fwd_compiled_graph_state.graph.training():
-            # For executing loss and its backward graph on CPU, we need to tell torch to compute gradients
+            # For executing loss and its backward graph on CPU, we need to tell torch to compute gradients.
             for output in model_outputs:
                 output.requires_grad = True
 
@@ -329,11 +324,6 @@ class CompiledModel:
         return self(inputs)
 
     def backward(self, loss_grad: torch.Tensor) -> List[torch.Tensor]:
-        if self.fwd_compiled_graph_state.graph.training():
-            for name, param in self.framework_module.module.named_parameters():
-                if name in self.bwd_compiled_graph_state.ordered_parameter_node_names:
-                    self.bwd_compiled_graph_state.post_const_eval_parameters[name] = param
-
         assert self.fwd_compiled_graph_state.graph.training(), "Model not compiled for training."
         consts_and_params = [*self.bwd_compiled_graph_state.get_ordered_constant_tensors(), *self.bwd_compiled_graph_state.get_ordered_parameter_tensors()]
 
@@ -344,7 +334,7 @@ class CompiledModel:
         for intermediate in self.fwd_compiled_graph_state.ordered_intermediate_names:
             intermediates.append(self.intermediates[intermediate])
 
-        # Check if loss_grad is not a list
+        # Make a list from gradients passed from loss function.
         if not isinstance(loss_grad, list):
             loss_grad = [loss_grad]
 
@@ -355,7 +345,9 @@ class CompiledModel:
             for idx, grad in enumerate(self.bwd_compiled_graph_state.ordered_output_names):
                 if name in grad:
                     if (param.shape != grads[idx].shape):
-                        grads[idx] = grads[idx].reshape(param.shape)
+                        # Our gradients for bias are 2D (of [1, N] shape) but PyTorch expects 1D - [N].
+                        assert (torch.squeeze(grads[idx], 0)).shape == param.shape
+                        grads[idx] = torch.squeeze(grads[idx], 0)
 
                     if param.grad is not None:
                         param.grad += grads[idx]

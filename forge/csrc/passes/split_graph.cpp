@@ -63,7 +63,7 @@ std::vector<graphlib::NodeId> map_to_ids(const std::vector<tt::graphlib::Node *>
     return ids;
 }
 
-void clone_and_add_to_graph(const Graph *graph, Graph *new_graph, const graphlib::Node *node)
+void clone_and_add(const graphlib::Node *node, Graph *new_graph)
 {
     auto cloned_node = node->clone(node->name());
     new_graph->add_node(std::move(cloned_node), 0 /*subgraph_id=*/);
@@ -106,7 +106,7 @@ std::unique_ptr<Graph> split_forward(const Graph* graph, const std::vector<graph
             continue;
         }
 
-        clone_and_add_to_graph(graph, fwd_graph.get(), node);
+        clone_and_add(node, fwd_graph.get());
 
         if (needs_intermediate_output(graph, node))
         {
@@ -191,7 +191,7 @@ std::unique_ptr<Graph> split_backward(const Graph *graph, const Graph *fwd_graph
             continue;
         }
 
-        clone_and_add_to_graph(graph, bwd_graph.get(), node);
+        clone_and_add(node, bwd_graph.get());
 
         for (auto operand : graph->data_operands(node))
         {
@@ -203,7 +203,7 @@ std::unique_ptr<Graph> split_backward(const Graph *graph, const Graph *fwd_graph
 
             if (operand->node_type() == graphlib::NodeType::kInput)
             {
-                clone_and_add_to_graph(graph, bwd_graph.get(), operand);
+                clone_and_add(operand, bwd_graph.get());
                 bwd_graph->add_edge(bwd_graph->get_node_by_name(operand->name()), bwd_graph->get_node_by_name(node->name()));
                 continue;
             }

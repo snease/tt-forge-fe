@@ -7,7 +7,7 @@ from torch import nn
 
 import forge
 from ..utils import *
-
+from forge.op.eval.common import compare_with_golden
 
 from loguru import logger
 
@@ -18,6 +18,9 @@ def test_mnist_training():
     num_epochs = 3
     batch_size = 1
     learning_rate = 0.001
+
+    # Limit number of batches to run - quicker test
+    limit_num_batches = 1000
     
     # Load dataset
     test_loader, train_loader = load_dataset(batch_size)
@@ -35,18 +38,15 @@ def test_mnist_training():
     framework_optimizer = torch.optim.SGD(framework_model.parameters(), lr=learning_rate)
     tt_model = forge.compile(framework_model, sample_inputs=[torch.rand(batch_size, 784)], loss=loss_fn, optimizer=framework_optimizer)
 
+    logger.info("Starting training loop... (logger will be disabled)")
     logger.disable("")
     for epoch_idx in range(num_epochs):
-        # Reset gradients (every batch)
+        # Reset gradients (every epoch) - since our batch size is currently 1,
+        # we accumulate gradients across multiple batches (limit_num_batches),
+        # and then run the optimizer.
         framework_optimizer.zero_grad()
 
-        for name, param in framework_model.named_parameters():
-            print(f"{name} = {param}")
-            print(f"{name}.grad = {param.grad}")
-
-
         total_loss = 0
-
         for batch_idx, (data, target) in enumerate(train_loader):
 
             # Create target tensor and leave on CPU
@@ -55,41 +55,36 @@ def test_mnist_training():
             # Forward pass (prediction) on device
             pred = tt_model(data)[0]
             golden_pred = framework_model(data)
+            compare_with_golden(golden_pred, pred)
 
             # Compute loss on CPU
             loss = loss_fn(pred, target)
+            total_loss += loss.item()
 
             golden_loss = loss_fn(golden_pred, target)
-
-            total_loss += loss.item()
+            compare_with_golden(golden_loss, loss)
             
-            # RUn backward pass on device
+            # Run backward pass on device
             loss.backward()
             
-            grad = tt_model.backward(pred.grad)
+            tt_model.backward(pred.grad)
 
-            if batch_idx == 1000:
+            if batch_idx >= limit_num_batches:
                 break
 
-            # Log gradients
-            # for name, param in tt_model.named_parameters():
-            #     writer.add_histogram(f"{name}.grad", param.grad, batch_idx)
-            #
-            # # Log loss
-            # writer.add_scalar("Loss", loss.item(), batch_idx)
-
-        # Adjust weights (on device)
         print(f"epoch: {epoch_idx} loss: {total_loss}")
+
+        # Adjust weights (on CPU)
         framework_optimizer.step()
 
+    test_loss = 0
     for batch_idx, (data, target) in enumerate(test_loader):
         pred = tt_model(data)[0]
         target = nn.functional.one_hot(target, num_classes=10).float()
 
-        print(pred)
-        print(target)
+        test_loss += loss_fn(pred, target)
 
-        print(loss_fn(pred, target))
-
-        if batch_idx == 10:
+        if batch_idx == 1000:
             break
+
+    print(f"Test (total) loss: {test_loss}")

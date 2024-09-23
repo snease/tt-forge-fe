@@ -615,9 +615,6 @@ def generate_initial_graph(context: CompileContext) -> CompileDepth:
             for name, value in module.named_parameters():
                 context.parameter_dict[name] = value
 
-    forge_module = ForgeGraphModule(context.graph_name, context.graph)
-    context.forge_module = forge_module
-
     return CompileDepth.POST_INITIAL_GRAPH_PASS
 
 def run_post_initial_graph_pass(context: CompileContext) -> CompileDepth:
@@ -849,9 +846,8 @@ def split_graph(context: CompileContext) -> CompileDepth:
     -------
     CompileDepth - next compile stage
     """
-    assert context.forge_module is not None
-
-    forge._C.split_graph(context.forge_module)
+    assert context.graph is not None
+    context.forge_module = forge._C.split_graph(context.graph)
 
     return CompileDepth.RUN_MLIR_COMPILER
 

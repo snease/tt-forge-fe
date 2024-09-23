@@ -307,10 +307,8 @@ std::unique_ptr<Graph> split_backward(const Graph *graph, const Graph *fwd_graph
     return bwd_graph;
 }
 
-void split_graph(tt::ForgeGraphModule& module)
+ForgeGraphModule split_graph(graphlib::Graph* graph)
 {
-    auto graph = module.get_graph(GraphType::Forward);
-
     for (auto node : graph->nodes_by_type(graphlib::NodeType::kPyOp))
     {
         if (node->as<graphlib::PyOpNode>()->op_type().op == "nop")
@@ -327,8 +325,9 @@ void split_graph(tt::ForgeGraphModule& module)
     fwd_graph->dump("split_exec_graphs_fwd");
     bwd_graph->dump("split_exec_graphs_bwd");
 
-    module.set_graph(GraphType::Forward, fwd_graph.release());
+    ForgeGraphModule module(graph->name(), fwd_graph.release());
     module.set_graph(GraphType::Backward, bwd_graph.release());
+    return module;
 }
 
 } // namespace tt::passes

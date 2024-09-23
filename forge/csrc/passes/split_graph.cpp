@@ -14,6 +14,7 @@
 #include "graph_lib/node.hpp"
 #include "graph_lib/node_types.hpp"
 #include "graph_lib/utils.hpp"
+#include "reportify/reportify.hpp"
 
 using Graph = tt::graphlib::Graph;
 
@@ -79,7 +80,7 @@ bool needs_intermediate_output(const Graph *graph, const graphlib::Node *node)
     bool has_output_node_already = false;
     for (auto user_edge : graph->user_data_edges(node))
     {
-        if (graph->node_by_id(user_edge.consumer_node_id)->get_epoch_type() == graphlib::NodeEpochType::Backward)
+        if (graph->node_by_id(user_edge.consumer_node_id)->is_backward())
         {
             has_bwd_edge = true;
         }
@@ -100,7 +101,7 @@ std::unique_ptr<Graph> split_forward(const Graph* graph, const std::vector<graph
 
     for (auto node : topo)
     {
-        if (node->get_epoch_type() != graphlib::NodeEpochType::Forward)
+        if (!node->is_forward())
         {
             continue;
         }
@@ -185,7 +186,7 @@ std::unique_ptr<Graph> split_backward(const Graph *graph, const Graph *fwd_graph
 
     for (auto node : topo)
     {
-        if (node->get_epoch_type() != graphlib::NodeEpochType::Backward)
+        if (!node->is_backward())
         {
             continue;
         }
@@ -207,7 +208,7 @@ std::unique_ptr<Graph> split_backward(const Graph *graph, const Graph *fwd_graph
                 continue;
             }
 
-            if (operand->get_epoch_type() == graphlib::NodeEpochType::Forward)
+            if (operand->is_forward())
             {
                 auto fwd_operand = fwd_graph->get_node_by_name(operand->name());
                 auto users = fwd_graph->data_users(fwd_operand);
@@ -307,7 +308,7 @@ ForgeGraphModule split_graph(graphlib::Graph* graph)
     auto topo = graphlib::topological_sort(*graph);
 
     auto fwd_graph = split_forward(graph, topo);
-    fwd_graph->dump("split_exec_graphs_fwd");
+    reportify::dump_graph(graph->name(), "split_fwd", fwd_graph.get());
 
     ForgeGraphModule module(graph->name(), fwd_graph.release());
 
@@ -317,8 +318,7 @@ ForgeGraphModule split_graph(graphlib::Graph* graph)
     }
 
     auto bwd_graph = split_backward(graph, module.get_graph(GraphType::Forward), topo);
-
-    bwd_graph->dump("split_exec_graphs_bwd");
+    reportify::dump_graph(graph->name(), "split_bwd", bwd_graph.get());
 
     module.set_graph(GraphType::Backward, bwd_graph.release());
     return module;

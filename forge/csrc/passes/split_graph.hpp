@@ -7,8 +7,9 @@
 
 namespace tt::passes 
 {
-    // Create execution graphs from the TT-Forge graph.
-    void create_execution_graphs(tt::ForgeGraphModule& graph);
+    // Split the graph into multiple graphs which will lower to different MLIR programs,
+    // i.e. forward, backward, etc.
+    void split_graph(tt::ForgeGraphModule& graph);
 
 } // namespace tt:passes
 

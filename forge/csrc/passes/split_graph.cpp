@@ -2,9 +2,9 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-#include "exec_graphs.hpp"
+#include "split_graph.hpp"
+
 #include <memory>
-#include <queue>
 #include <utils/assert.hpp>
 #include <utils/logger.hpp>
 
@@ -307,7 +307,7 @@ std::unique_ptr<Graph> split_backward(const Graph *graph, const Graph *fwd_graph
     return bwd_graph;
 }
 
-void create_execution_graphs(tt::ForgeGraphModule& module)
+void split_graph(tt::ForgeGraphModule& module)
 {
     auto graph = module.get_graph(GraphType::Forward);
 

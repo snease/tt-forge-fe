@@ -26,7 +26,7 @@ class CompileDepth(Enum):
     AUTOGRAD = 6
     POST_AUTOGRAD_PASS = 7
     PRE_LOWERING_PASS = 8
-    CREATE_EXEC_GRAPHS = 9
+    SPLIT_GRAPH = 9
     RUN_MLIR_COMPILER = 10
     FINISH_COMPILE = 11
     FULL = 12

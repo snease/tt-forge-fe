@@ -22,22 +22,12 @@ namespace tt::passes
 
 bool is_activation_node(const tt::graphlib::Node *node)
 {
-    if (node->node_type() != graphlib::NodeType::kInput)
-    {
-        return false;
-    }
-
-    return node->as<graphlib::InputNode>()->is_activation();
+    return node->node_type() == graphlib::NodeType::kInput && node->as<graphlib::InputNode>()->is_activation();
 }
 
 bool is_parameter_node(const tt::graphlib::Node *node)
 {
-    if (node->node_type() != graphlib::NodeType::kInput)
-    {
-        return false;
-    }
-
-    return node->as<graphlib::InputNode>()->is_parameter();
+    return node->node_type() == graphlib::NodeType::kInput && node->as<graphlib::InputNode>()->is_parameter();
 }
 
 bool is_regular_output_node(const tt::graphlib::Node *node)
@@ -179,6 +169,7 @@ std::unique_ptr<Graph> split_forward(const Graph* graph, const std::vector<graph
 std::unique_ptr<Graph> split_backward(const Graph *graph, const Graph *fwd_graph, const std::vector<graphlib::Node*> &topo)
 {
     auto bwd_graph = std::make_unique<Graph>(tt::graphlib::IRLevel::IR_TT_FORGE, "backward");
+    bwd_graph->set_training(graph->training());
 
     // Adding all the intermediate outputs from the forward graph as inputs to the backward graph.
     // Order is important, so we add them in the order they were added to the forward graph.
@@ -262,6 +253,10 @@ std::unique_ptr<Graph> split_backward(const Graph *graph, const Graph *fwd_graph
         }
     }
 
+    for (auto queue : bwd_graph->nodes_by_type(graphlib::NodeType::kQueue)) {
+        bwd_graph->remove_node(queue);
+    }
+
     std::vector<graphlib::NodeId> bwd_module_inputs;
     for (auto input : graph->ordered_module_inputs())
     {
@@ -309,23 +304,22 @@ std::unique_ptr<Graph> split_backward(const Graph *graph, const Graph *fwd_graph
 
 ForgeGraphModule split_graph(graphlib::Graph* graph)
 {
-    for (auto node : graph->nodes_by_type(graphlib::NodeType::kPyOp))
-    {
-        if (node->as<graphlib::PyOpNode>()->op_type().op == "nop")
-        {
-            graphlib::bypass_node(graph, node, true /* remove_node */);
-        }
-    }
-
     auto topo = graphlib::topological_sort(*graph);
 
     auto fwd_graph = split_forward(graph, topo);
-    auto bwd_graph = split_backward(graph, fwd_graph.get(), topo);
-
     fwd_graph->dump("split_exec_graphs_fwd");
-    bwd_graph->dump("split_exec_graphs_bwd");
 
     ForgeGraphModule module(graph->name(), fwd_graph.release());
+
+    if (!graph->training()) {
+        // We're not in training mode, so we don't need to split the graph further.
+        return module;
+    }
+
+    auto bwd_graph = split_backward(graph, module.get_graph(GraphType::Forward), topo);
+
+    bwd_graph->dump("split_exec_graphs_bwd");
+
     module.set_graph(GraphType::Backward, bwd_graph.release());
     return module;
 }

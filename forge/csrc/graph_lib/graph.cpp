@@ -812,7 +812,6 @@ std::vector<std::string> Graph::get_ordered_intermediate_names() const
         if (node->node_type() == NodeType::kOutput
             && node->as<OutputNode>()->is_intermediate())
         {
-            log_info("Intermediate node: {}", node->name());
             ordered_intermediate_names.push_back(node->name());
         }
     }

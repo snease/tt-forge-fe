@@ -68,18 +68,6 @@ class MLIRGenerator
             for (auto graph : module.graphs())
             {
                 emit_mlir_function(graph, graph->name());
-                // Create a string to store the output
-                std::string moduleStr;
-                llvm::raw_string_ostream rso(moduleStr);
-
-                // Print the MLIR module
-                mlir::OpPrintingFlags printFlags;
-                printFlags.enableDebugInfo();
-                graphModule_.print(rso, printFlags);
-
-                rso.flush();
-
-                log_info(LogMLIRCompiler, "MLIR module after lowering TT-Forge graph:\n{}", moduleStr);
             }
 
             /// Verify the module after we have finished constructing it, this will check
@@ -186,7 +174,7 @@ class MLIRGenerator
             // Add the graph inputs to the argument list.
             for (auto *input: graph->ordered_module_inputs())
             {
-                log_info(LogMLIRCompiler, "Adding input {} to the argument list.", input->name());
+                log_trace(LogMLIRCompiler, "Adding input {} to the argument list.", input->name());
 
                 argument_nodes.push_back(input);
                 argument_types.push_back(get_node_type(input));
@@ -195,7 +183,7 @@ class MLIRGenerator
             // Add the graph constants to the argument list.
             for (auto *constant : graph->get_constant_nodes())
             {
-                log_info(LogMLIRCompiler, "Adding constant {} to the argument list.", constant->name());
+                log_trace(LogMLIRCompiler, "Adding constant {} to the argument list.", constant->name());
 
                 argument_nodes.push_back(constant);
                 argument_types.push_back(get_node_type(constant));
@@ -204,7 +192,7 @@ class MLIRGenerator
             // Add the graph parameters to the argument list.
             for(auto *parameter: graph->get_parameter_nodes())
             {
-                log_info(LogMLIRCompiler, "Adding parameter {} to the argument list.", parameter->name());
+                log_trace(LogMLIRCompiler, "Adding parameter {} to the argument list.", parameter->name());
 
                 argument_nodes.push_back(parameter);
                 argument_types.push_back(get_node_type(parameter));
@@ -215,7 +203,7 @@ class MLIRGenerator
             auto output_nodes = graph->ordered_module_outputs();
             for (auto *output : output_nodes)
             {
-                log_info(LogMLIRCompiler, "Adding output {} to the return list.", output->name());
+                log_trace(LogMLIRCompiler, "Adding output {} to the return list.", output->name());
                 returns.push_back(get_node_type(output));
             }
 

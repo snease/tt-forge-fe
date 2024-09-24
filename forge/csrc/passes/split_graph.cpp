@@ -163,7 +163,7 @@ std::unique_ptr<Graph> extract_backward_graph(
 
     for (auto intermediate_output : fwd_intermediate_outputs)
     {
-        log_info("Adding intermediate output {} as input to bwd graph", intermediate_output->name());
+        log_debug("Adding intermediate output {} as input to bwd graph", intermediate_output->name());
         auto intermediate_output_node = graphlib::create_node<graphlib::InputNode>(
             intermediate_output->name(), graphlib::InputNodeType::Activation, false);
         intermediate_output_node->set_shape(intermediate_output->shape());

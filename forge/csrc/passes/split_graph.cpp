@@ -49,6 +49,7 @@ void clone_and_connect_operands(const graphlib::Graph* src_graph, const graphlib
 
     for (auto operand : src_graph->operands(src_node))
     {
+        TT_ASSERT(dst_graph->has_node_with_name(operand->name()), "Expected operand {} to be present in the destination graph", operand->name());
         auto dst_operand = dst_graph->get_node_by_name(operand->name());
         dst_graph->add_edge(dst_operand, dst_graph->get_node_by_name(src_node_name));
     }
@@ -148,14 +149,40 @@ std::unique_ptr<Graph> extract_backward_graph(const Graph *graph, const Graph *f
 
     // Adding all the intermediate outputs from the forward graph as inputs to the backward graph.
     // Order is important, so we add them in the order they were added to the forward graph.
-    for (auto intermediate_output : fwd_graph->ordered_intermediates())
+    auto fwd_intermediate_outputs = fwd_graph->ordered_intermediates();
+    std::vector<graphlib::NodeId> bwd_intermediate_inputs;
+
+    bwd_intermediate_inputs.reserve(fwd_intermediate_outputs.size());
+
+    for (auto intermediate_output : fwd_intermediate_outputs)
     {
         log_info("Adding intermediate output {} as input to bwd graph", intermediate_output->name());
         auto intermediate_output_node = graphlib::create_node<graphlib::InputNode>(intermediate_output->name(), graphlib::InputNodeType::Activation, false);
         intermediate_output_node->set_shape(intermediate_output->shape());
         intermediate_output_node->set_output_df(intermediate_output->output_df());
 
-        bwd_graph->add_node(std::move(intermediate_output_node), 0 /*subgraph_id=*/);
+        auto added_node = bwd_graph->add_node(std::move(intermediate_output_node), 0 /*subgraph_id=*/);
+        bwd_intermediate_inputs.push_back(added_node->id());
+    }
+
+    // For all inputs for the forward graph that have users in the backward graph,
+    // clone them and add them to the backward graph.
+    for (auto input : graph->ordered_module_inputs())
+    {
+        if (input->is_forward())
+        {
+            auto user_edges = graph->user_data_edges(input);
+
+            bool has_bwd_user = std::any_of(user_edges.begin(), user_edges.end(), [graph](const graphlib::Edge &edge) {
+                return graph->node_by_id(edge.consumer_node_id)->is_backward();
+            });
+
+            if (has_bwd_user)
+            {
+                log_debug("Adding input node {} as input to bwd graph", input->name());
+                clone_and_add(input, bwd_graph.get());
+            }
+        }
     }
 
     for (auto node : topo)
@@ -165,19 +192,37 @@ std::unique_ptr<Graph> extract_backward_graph(const Graph *graph, const Graph *f
             continue;
         }
 
+        if (node->node_type() == graphlib::NodeType::kQueue)
+        {
+            auto queue_node = node->as<graphlib::QueueNode>();
+
+            // Previous compiler passes shouldn't have added any other type of queue nodes.
+            TT_ASSERT(queue_node->is_grad_accumulator(), "Expected only grad accumulator queue nodes in the graph");
+
+            // For grad accumulator queue nodes, we need to add an output node to the backward graph.
+            TT_ASSERT(graph->operand_data_edges(queue_node).size() == 1, "Expected only one operand edge for grad accumulator queue node");
+            auto operand = graph->data_operands(queue_node)[0];
+
+            auto output_node = graphlib::create_node<graphlib::OutputNode>(queue_node->name() + "_grad_accumulator");
+            output_node->set_shape(queue_node->shape());
+            output_node->set_output_df(queue_node->output_df());
+            auto grad_out = bwd_graph->add_node(std::move(output_node), 0 /*subgraph_id=*/);
+
+            // Since we are traversing the graph in topological order, the operand node should already be present in the backward graph.
+            TT_ASSERT(bwd_graph->has_node_with_name(operand->name()), "Expected operand {} to be present in the backward graph", operand->name());
+
+            auto cloned_operand = bwd_graph->get_node_by_name(operand->name());
+            bwd_graph->add_edge(cloned_operand, grad_out, 0, 0, graphlib::EdgeType::kData);
+
+            continue;
+        }
+
         clone_and_add(node, bwd_graph.get());
 
         for (auto operand : graph->data_operands(node))
         {
             if (bwd_graph->has_node_with_name(operand->name()))
             {
-                bwd_graph->add_edge(bwd_graph->get_node_by_name(operand->name()), bwd_graph->get_node_by_name(node->name()));
-                continue;
-            }
-
-            if (operand->node_type() == graphlib::NodeType::kInput)
-            {
-                clone_and_add(operand, bwd_graph.get());
                 bwd_graph->add_edge(bwd_graph->get_node_by_name(operand->name()), bwd_graph->get_node_by_name(node->name()));
                 continue;
             }
@@ -208,30 +253,12 @@ std::unique_ptr<Graph> extract_backward_graph(const Graph *graph, const Graph *f
                 }
             }
         }
-
-        if (node->node_type() == graphlib::NodeType::kQueue)
-        {
-            auto queue_node = node->as<graphlib::QueueNode>();
-            if (queue_node->is_grad_accumulator())
-            {
-                TT_ASSERT(graph->operand_data_edges(queue_node).size() == 1, "Expected only one operand edge for grad accumulator queue node");
-                auto operand = graph->data_operands(queue_node)[0];
-                auto output_node = graphlib::create_node<graphlib::OutputNode>(queue_node->name() + "_grad_accumulator");
-                output_node->set_shape(queue_node->shape());
-                log_info("Setting shape of {} output node to {}", output_node->name(), queue_node->shape());
-                output_node->set_output_df(queue_node->output_df());
-                auto grad_out = bwd_graph->add_node(std::move(output_node), 0 /*subgraph_id=*/);
-
-                auto cloned_operand = bwd_graph->get_node_by_name(operand->name());
-                bwd_graph->add_edge(cloned_operand, grad_out, 0, 0, graphlib::EdgeType::kData);
-            }
-        }
     }
 
-    for (auto queue : bwd_graph->nodes_by_type(graphlib::NodeType::kQueue)) {
-        bwd_graph->remove_node(queue);
-    }
-
+    // We will construct backward inputs in the following order:
+    // 1. Inputs that are exclusive to the backward graph
+    // 2. Intermediate outputs from the forward graph
+    // 3. Inputs from the forward graph that have users in the backward graph
     std::vector<graphlib::NodeId> bwd_module_inputs;
     for (auto input : graph->ordered_module_inputs())
     {
@@ -247,22 +274,17 @@ std::unique_ptr<Graph> extract_backward_graph(const Graph *graph, const Graph *f
         {
             bwd_module_inputs.push_back(bwd_graph->get_node_by_name(input->name())->id());
         }
-
     }
 
-    for (auto bwd_input : bwd_graph->nodes_by_type(graphlib::NodeType::kInput))
+    for (auto input : graph->ordered_module_inputs())
     {
-        if (is_loss_input_node(bwd_input) || graphlib::is_constant_input(bwd_input) || is_parameter_node(bwd_input))
+        if (input->is_forward())
         {
-            continue;
+            if (bwd_graph->has_node_with_name(input->name()))
+            {
+                bwd_module_inputs.push_back(bwd_graph->get_node_by_name(input->name())->id());
+            }
         }
-
-        if (std::find(bwd_module_inputs.begin(), bwd_module_inputs.end(), bwd_input->id()) != bwd_module_inputs.end())
-        {
-            continue;
-        }
-
-        bwd_module_inputs.push_back(bwd_input->id());
     }
 
     bwd_graph->register_module_inputs(bwd_module_inputs);

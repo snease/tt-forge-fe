@@ -126,7 +126,7 @@ std::unique_ptr<Graph> extract_forward_graph(const Graph *graph, const std::vect
 
             log_debug("Adding intermediate output node {}", intermediate_name);
             auto intermediate_output = graphlib::create_node<graphlib::OutputNode>(intermediate_name);
-            intermediate_output->mark_intermediate();
+            intermediate_output->set_intermediate(true);
             intermediate_output->set_shape(node->shape());
             intermediate_output->set_output_df(node->output_df());
 

@@ -21,46 +21,14 @@ using Graph = tt::graphlib::Graph;
 namespace tt::passes
 {
 
-bool is_activation_node(const tt::graphlib::Node *node)
-{
-    return node->node_type() == graphlib::NodeType::kInput && node->as<graphlib::InputNode>()->is_activation();
-}
-
 bool is_parameter_node(const tt::graphlib::Node *node)
 {
     return node->node_type() == graphlib::NodeType::kInput && node->as<graphlib::InputNode>()->is_parameter();
 }
 
-bool is_regular_output_node(const tt::graphlib::Node *node)
-{
-    return node->node_type() == graphlib::NodeType::kOutput && !node->as<graphlib::OutputNode>()->is_intermediate();
-}
-
-bool is_intermediate_output_node(const tt::graphlib::Node *node)
-{
-    return node->node_type() == graphlib::NodeType::kOutput && node->as<graphlib::OutputNode>()->is_intermediate();
-}
-
 bool is_loss_input_node(const tt::graphlib::Node *node)
 {
     return node->node_type() == graphlib::NodeType::kInput && node->as<graphlib::InputNode>()->is_loss();
-}
-
-bool is_loss_output_node(const tt::graphlib::Node *node)
-{
-    return node->node_type() == graphlib::NodeType::kOutput && node->as<graphlib::OutputNode>()->is_loss_output();
-}
-
-std::vector<graphlib::NodeId> map_to_ids(const std::vector<tt::graphlib::Node *> &nodes)
-{
-    std::vector<graphlib::NodeId> ids;
-    ids.reserve(nodes.size());
-    for (auto node : nodes)
-    {
-        ids.push_back(node->id());
-    }
-
-    return ids;
 }
 
 void clone_and_add(const graphlib::Node *node, Graph *new_graph)
@@ -69,36 +37,54 @@ void clone_and_add(const graphlib::Node *node, Graph *new_graph)
     new_graph->add_node(std::move(cloned_node), 0 /*subgraph_id=*/);
 }
 
+// 1. Clone a node from the source graph
+// 2. Add it to the dest graph
+// 3. Replicate all operand edges from the source graph to the dest graph
+void clone_and_connect_operands(const graphlib::Graph* src_graph, const graphlib::Node* src_node, Graph* dst_graph)
+{
+    auto cloned_node = src_node->clone(src_node->name());
+    dst_graph->add_node(std::move(cloned_node), 0 /*subgraph_id=*/);
+
+    auto& src_node_name = src_node->name();
+
+    for (auto operand : src_graph->operands(src_node))
+    {
+        auto dst_operand = dst_graph->get_node_by_name(operand->name());
+        dst_graph->add_edge(dst_operand, dst_graph->get_node_by_name(src_node_name));
+    }
+}
+
 bool needs_intermediate_output(const Graph *graph, const graphlib::Node *node)
 {
-    if (node->node_type() != graphlib::NodeType::kPyOp)
+    if (!node->is_forward() || node->node_type() != graphlib::NodeType::kPyOp)
     {
         return false;
     }
 
-    bool has_bwd_edge = false;
-    bool has_output_node_already = false;
-    for (auto user_edge : graph->user_data_edges(node))
-    {
-        if (graph->node_by_id(user_edge.consumer_node_id)->is_backward())
-        {
-            has_bwd_edge = true;
-        }
+    auto user_edges = graph->user_data_edges(node);
 
-        if (graph->node_by_id(user_edge.consumer_node_id)->node_type() == graphlib::NodeType::kOutput)
-        {
-            has_output_node_already = true;
-        }
-    }
-    
-    return has_bwd_edge && !has_output_node_already;
+    // Intermediate node is needed if an op in forward graph has a data user in the backward graph.
+    bool has_bwd_user = std::any_of(user_edges.begin(), user_edges.end(), [graph](const graphlib::Edge &edge) {
+        return graph->node_by_id(edge.consumer_node_id)->is_backward();
+    });
+
+    // Don't add duplicate intermediate output nodes.
+    bool has_output_node_already = std::any_of(user_edges.begin(), user_edges.end(), [graph](const graphlib::Edge &edge) {
+        return graph->node_by_id(edge.consumer_node_id)->node_type() == graphlib::NodeType::kOutput;
+    });
+
+    return has_bwd_user && !has_output_node_already;
 }
 
+// Create a forward graph by extracting all forward nodes from the original graph.
+// The forward graph also needs to have intermediate output nodes for ops that have data users in the backward graph.
 std::unique_ptr<Graph> split_forward(const Graph* graph, const std::vector<graphlib::Node*> &topo)
 {
     auto fwd_graph = std::make_unique<Graph>(tt::graphlib::IRLevel::IR_TT_FORGE, "forward");
     fwd_graph->set_training(graph->training());
 
+    // Create a forward graph by cloning all forward nodes from the original graph.
+    // Also, establish the same data edges between forward nodes as in the original graph.
     for (auto node : topo)
     {
         if (!node->is_forward())
@@ -106,8 +92,23 @@ std::unique_ptr<Graph> split_forward(const Graph* graph, const std::vector<graph
             continue;
         }
 
-        clone_and_add(node, fwd_graph.get());
+        clone_and_connect_operands(graph, node, fwd_graph.get());
+    }
 
+    // Add all the module inputs to the forward graph (keeping the same order as in the original graph).
+    std::vector<graphlib::NodeId> fwd_module_inputs;
+    for (auto input : graph->ordered_module_inputs())
+    {
+        if (input->is_forward())
+        {
+            fwd_module_inputs.push_back(fwd_graph->get_node_by_name(input->name())->id());
+        }
+    }
+
+    // Since we are splitting the graph, we need to add intermediate output nodes for all ops which will have
+    // data users outside of this graph.
+    for (auto node : graph->nodes())
+    {
         if (needs_intermediate_output(graph, node))
         {
             auto intermediate_output = graphlib::create_node<graphlib::OutputNode>(node->name() + "_intermediate");
@@ -117,20 +118,6 @@ std::unique_ptr<Graph> split_forward(const Graph* graph, const std::vector<graph
 
             auto intermediate_output_node = fwd_graph->add_node(std::move(intermediate_output), 0 /*subgraph_id=*/);
             fwd_graph->add_edge(fwd_graph->get_node_by_name(node->name()), intermediate_output_node);
-        }
-
-        for (auto operand : graph->operands(node))
-        {
-            fwd_graph->add_edge(fwd_graph->get_node_by_name(operand->name()), fwd_graph->get_node_by_name(node->name()));
-        }
-    }
-
-    std::vector<graphlib::NodeId> fwd_module_inputs;
-    for (auto input : graph->ordered_module_inputs())
-    {
-        if (input->is_forward())
-        {
-            fwd_module_inputs.push_back(fwd_graph->get_node_by_name(input->name())->id());
         }
     }
 

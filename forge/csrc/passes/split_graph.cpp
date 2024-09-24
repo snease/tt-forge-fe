@@ -40,16 +40,19 @@ void clone_and_add(const graphlib::Node *node, Graph *new_graph)
 // 1. Clone a node from the source graph
 // 2. Add it to the dest graph
 // 3. Replicate all operand edges from the source graph to the dest graph
-void clone_and_connect_operands(const graphlib::Graph* src_graph, const graphlib::Node* src_node, Graph* dst_graph)
+void clone_and_connect_operands(const graphlib::Graph *src_graph, const graphlib::Node *src_node, Graph *dst_graph)
 {
     auto cloned_node = src_node->clone(src_node->name());
     dst_graph->add_node(std::move(cloned_node), 0 /*subgraph_id=*/);
 
-    auto& src_node_name = src_node->name();
+    auto &src_node_name = src_node->name();
 
     for (auto operand : src_graph->operands(src_node))
     {
-        TT_ASSERT(dst_graph->has_node_with_name(operand->name()), "Expected operand {} to be present in the destination graph", operand->name());
+        TT_ASSERT(
+            dst_graph->has_node_with_name(operand->name()),
+            "Expected operand {} to be present in the destination graph",
+            operand->name());
         auto dst_operand = dst_graph->get_node_by_name(operand->name());
         dst_graph->add_edge(dst_operand, dst_graph->get_node_by_name(src_node_name));
     }
@@ -65,21 +68,24 @@ bool needs_intermediate_output(const Graph *graph, const graphlib::Node *node)
     auto user_edges = graph->user_data_edges(node);
 
     // Intermediate node is needed if an op in forward graph has a data user in the backward graph.
-    bool has_bwd_user = std::any_of(user_edges.begin(), user_edges.end(), [graph](const graphlib::Edge &edge) {
-        return graph->node_by_id(edge.consumer_node_id)->is_backward();
-    });
+    bool has_bwd_user = std::any_of(
+        user_edges.begin(),
+        user_edges.end(),
+        [graph](const graphlib::Edge &edge) { return graph->node_by_id(edge.consumer_node_id)->is_backward(); });
 
     // Don't add duplicate intermediate output nodes.
-    bool has_output_node_already = std::any_of(user_edges.begin(), user_edges.end(), [graph](const graphlib::Edge &edge) {
-        return graph->node_by_id(edge.consumer_node_id)->node_type() == graphlib::NodeType::kOutput;
-    });
+    bool has_output_node_already = std::any_of(
+        user_edges.begin(),
+        user_edges.end(),
+        [graph](const graphlib::Edge &edge)
+        { return graph->node_by_id(edge.consumer_node_id)->node_type() == graphlib::NodeType::kOutput; });
 
     return has_bwd_user && !has_output_node_already;
 }
 
 // Create a forward graph by extracting all forward nodes from the original graph.
 // The forward graph also needs to have intermediate output nodes for ops that have data users in the backward graph.
-std::unique_ptr<Graph> extract_forward_graph(const Graph* graph, const std::vector<graphlib::Node*> &topo)
+std::unique_ptr<Graph> extract_forward_graph(const Graph *graph, const std::vector<graphlib::Node *> &topo)
 {
     auto fwd_graph = std::make_unique<Graph>(tt::graphlib::IRLevel::IR_TT_FORGE, "forward");
     fwd_graph->set_training(graph->training());
@@ -142,7 +148,8 @@ std::unique_ptr<Graph> extract_forward_graph(const Graph* graph, const std::vect
     return fwd_graph;
 }
 
-std::unique_ptr<Graph> extract_backward_graph(const Graph *graph, const Graph *fwd_graph, const std::vector<graphlib::Node*> &topo)
+std::unique_ptr<Graph> extract_backward_graph(
+    const Graph *graph, const Graph *fwd_graph, const std::vector<graphlib::Node *> &topo)
 {
     auto bwd_graph = std::make_unique<Graph>(tt::graphlib::IRLevel::IR_TT_FORGE, "backward");
     bwd_graph->set_training(graph->training());
@@ -157,7 +164,8 @@ std::unique_ptr<Graph> extract_backward_graph(const Graph *graph, const Graph *f
     for (auto intermediate_output : fwd_intermediate_outputs)
     {
         log_info("Adding intermediate output {} as input to bwd graph", intermediate_output->name());
-        auto intermediate_output_node = graphlib::create_node<graphlib::InputNode>(intermediate_output->name(), graphlib::InputNodeType::Activation, false);
+        auto intermediate_output_node = graphlib::create_node<graphlib::InputNode>(
+            intermediate_output->name(), graphlib::InputNodeType::Activation, false);
         intermediate_output_node->set_shape(intermediate_output->shape());
         intermediate_output_node->set_output_df(intermediate_output->output_df());
 
@@ -173,9 +181,11 @@ std::unique_ptr<Graph> extract_backward_graph(const Graph *graph, const Graph *f
         {
             auto user_edges = graph->user_data_edges(input);
 
-            bool has_bwd_user = std::any_of(user_edges.begin(), user_edges.end(), [graph](const graphlib::Edge &edge) {
-                return graph->node_by_id(edge.consumer_node_id)->is_backward();
-            });
+            bool has_bwd_user = std::any_of(
+                user_edges.begin(),
+                user_edges.end(),
+                [graph](const graphlib::Edge &edge)
+                { return graph->node_by_id(edge.consumer_node_id)->is_backward(); });
 
             if (has_bwd_user)
             {
@@ -200,7 +210,9 @@ std::unique_ptr<Graph> extract_backward_graph(const Graph *graph, const Graph *f
             TT_ASSERT(queue_node->is_grad_accumulator(), "Expected only grad accumulator queue nodes in the graph");
 
             // For grad accumulator queue nodes, we need to add an output node to the backward graph.
-            TT_ASSERT(graph->operand_data_edges(queue_node).size() == 1, "Expected only one operand edge for grad accumulator queue node");
+            TT_ASSERT(
+                graph->operand_data_edges(queue_node).size() == 1,
+                "Expected only one operand edge for grad accumulator queue node");
             auto operand = graph->data_operands(queue_node)[0];
 
             auto output_node = graphlib::create_node<graphlib::OutputNode>(queue_node->name() + "_grad_accumulator");
@@ -208,8 +220,12 @@ std::unique_ptr<Graph> extract_backward_graph(const Graph *graph, const Graph *f
             output_node->set_output_df(queue_node->output_df());
             auto grad_out = bwd_graph->add_node(std::move(output_node), 0 /*subgraph_id=*/);
 
-            // Since we are traversing the graph in topological order, the operand node should already be present in the backward graph.
-            TT_ASSERT(bwd_graph->has_node_with_name(operand->name()), "Expected operand {} to be present in the backward graph", operand->name());
+            // Since we are traversing the graph in topological order, the operand node should already be present in the
+            // backward graph.
+            TT_ASSERT(
+                bwd_graph->has_node_with_name(operand->name()),
+                "Expected operand {} to be present in the backward graph",
+                operand->name());
 
             auto cloned_operand = bwd_graph->get_node_by_name(operand->name());
             bwd_graph->add_edge(cloned_operand, grad_out, 0, 0, graphlib::EdgeType::kData);
@@ -223,7 +239,8 @@ std::unique_ptr<Graph> extract_backward_graph(const Graph *graph, const Graph *f
         {
             if (bwd_graph->has_node_with_name(operand->name()))
             {
-                bwd_graph->add_edge(bwd_graph->get_node_by_name(operand->name()), bwd_graph->get_node_by_name(node->name()));
+                bwd_graph->add_edge(
+                    bwd_graph->get_node_by_name(operand->name()), bwd_graph->get_node_by_name(node->name()));
                 continue;
             }
 
@@ -239,16 +256,19 @@ std::unique_ptr<Graph> extract_backward_graph(const Graph *graph, const Graph *f
                         // Find the intermediate output node in the fwd graph
                         if (bwd_graph->has_node_with_name(user->name()))
                         {
-                            bwd_graph->add_edge(bwd_graph->get_node_by_name(user->name()), bwd_graph->get_node_by_name(node->name()));
+                            bwd_graph->add_edge(
+                                bwd_graph->get_node_by_name(user->name()), bwd_graph->get_node_by_name(node->name()));
                             continue;
                         }
 
-                        auto intermediate_input_node = graphlib::create_node<graphlib::InputNode>(user->name(), graphlib::InputNodeType::Activation, false);
+                        auto intermediate_input_node = graphlib::create_node<graphlib::InputNode>(
+                            user->name(), graphlib::InputNodeType::Activation, false);
                         intermediate_input_node->set_shape(user->shape());
                         intermediate_input_node->set_output_df(user->output_df());
 
                         bwd_graph->add_node(std::move(intermediate_input_node), 0 /*subgraph_id=*/);
-                        bwd_graph->add_edge(bwd_graph->get_node_by_name(user->name()), bwd_graph->get_node_by_name(node->name()));
+                        bwd_graph->add_edge(
+                            bwd_graph->get_node_by_name(user->name()), bwd_graph->get_node_by_name(node->name()));
                     }
                 }
             }
@@ -268,7 +288,7 @@ std::unique_ptr<Graph> extract_backward_graph(const Graph *graph, const Graph *f
         }
     }
 
-    for (auto input: fwd_graph->ordered_module_outputs())
+    for (auto input : fwd_graph->ordered_module_outputs())
     {
         if (bwd_graph->has_node_with_name(input->name()))
         {
@@ -300,7 +320,7 @@ std::unique_ptr<Graph> extract_backward_graph(const Graph *graph, const Graph *f
 }
 
 // Splits the graph into multiple graphs which will be lowered to MLIR as different functions.
-ForgeGraphModule split_graph(graphlib::Graph* graph)
+ForgeGraphModule split_graph(graphlib::Graph *graph)
 {
     auto topo = graphlib::topological_sort(*graph);
 
@@ -309,7 +329,8 @@ ForgeGraphModule split_graph(graphlib::Graph* graph)
 
     ForgeGraphModule module(graph->name(), fwd_graph.release());
 
-    if (!graph->training()) {
+    if (!graph->training())
+    {
         // We're not in training mode, so we don't need to split the graph further.
         return module;
     }
@@ -321,4 +342,4 @@ ForgeGraphModule split_graph(graphlib::Graph* graph)
     return module;
 }
 
-} // namespace tt::passes
+}  // namespace tt::passes

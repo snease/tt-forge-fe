@@ -78,7 +78,7 @@ bool needs_intermediate_output(const Graph *graph, const graphlib::Node *node)
 
 // Create a forward graph by extracting all forward nodes from the original graph.
 // The forward graph also needs to have intermediate output nodes for ops that have data users in the backward graph.
-std::unique_ptr<Graph> split_forward(const Graph* graph, const std::vector<graphlib::Node*> &topo)
+std::unique_ptr<Graph> extract_forward_graph(const Graph* graph, const std::vector<graphlib::Node*> &topo)
 {
     auto fwd_graph = std::make_unique<Graph>(tt::graphlib::IRLevel::IR_TT_FORGE, "forward");
     fwd_graph->set_training(graph->training());
@@ -101,60 +101,47 @@ std::unique_ptr<Graph> split_forward(const Graph* graph, const std::vector<graph
     {
         if (input->is_forward())
         {
+            log_debug("Adding input node {} to inputs", input->name());
             fwd_module_inputs.push_back(fwd_graph->get_node_by_name(input->name())->id());
         }
     }
 
+    fwd_graph->register_module_inputs(fwd_module_inputs);
+
     // Since we are splitting the graph, we need to add intermediate output nodes for all ops which will have
     // data users outside of this graph.
+    std::vector<graphlib::NodeId> fwd_intermediates;
     for (auto node : graph->nodes())
     {
         if (needs_intermediate_output(graph, node))
         {
-            auto intermediate_output = graphlib::create_node<graphlib::OutputNode>(node->name() + "_intermediate");
+            auto intermediate_name = node->name() + "_intermediate";
+
+            log_debug("Adding intermediate output node {}", intermediate_name);
+            auto intermediate_output = graphlib::create_node<graphlib::OutputNode>(intermediate_name);
             intermediate_output->mark_intermediate();
             intermediate_output->set_shape(node->shape());
             intermediate_output->set_output_df(node->output_df());
 
             auto intermediate_output_node = fwd_graph->add_node(std::move(intermediate_output), 0 /*subgraph_id=*/);
             fwd_graph->add_edge(fwd_graph->get_node_by_name(node->name()), intermediate_output_node);
+
+            fwd_intermediates.push_back(intermediate_output_node->id());
         }
     }
-
-    fwd_graph->register_module_inputs(fwd_module_inputs);
 
     for (auto output : graph->ordered_module_outputs())
     {
-        log_info("Adding node {} to outputs", output->name());
+        log_debug("Adding node {} to fwd module outputs", output->name());
         fwd_graph->register_module_outputs({fwd_graph->get_node_by_name(output->name())->id()}, true /* append */);
     }
 
-    std::vector<graphlib::NodeId> fwd_module_intermediates;
-    for (auto output : fwd_graph->nodes_by_type(graphlib::NodeType::kOutput))
-    {
-        if (graph->has_node_with_name(output->name()))
-        {
-            continue;
-        }
-
-        if (output->as<graphlib::OutputNode>()->is_intermediate())
-        {
-            log_info("Adding node {} to intermediate outputs", output->name());
-            fwd_module_intermediates.push_back(output->id());
-        }
-        else
-        {
-            log_info("Adding node {} to outputs", output->name());
-            fwd_graph->register_module_outputs({output->id()}, true /* append */);
-        }
-    }
-
-    fwd_graph->register_module_outputs(fwd_module_intermediates, true /* append */);
+    fwd_graph->register_module_outputs(fwd_intermediates, true /* append */);
 
     return fwd_graph;
 }
 
-std::unique_ptr<Graph> split_backward(const Graph *graph, const Graph *fwd_graph, const std::vector<graphlib::Node*> &topo)
+std::unique_ptr<Graph> extract_backward_graph(const Graph *graph, const Graph *fwd_graph, const std::vector<graphlib::Node*> &topo)
 {
     auto bwd_graph = std::make_unique<Graph>(tt::graphlib::IRLevel::IR_TT_FORGE, "backward");
     bwd_graph->set_training(graph->training());
@@ -163,7 +150,7 @@ std::unique_ptr<Graph> split_backward(const Graph *graph, const Graph *fwd_graph
     // Order is important, so we add them in the order they were added to the forward graph.
     for (auto intermediate_output : fwd_graph->ordered_intermediates())
     {
-        log_info("Adding intermediate output {} as input to backward graph", intermediate_output->name());
+        log_info("Adding intermediate output {} as input to bwd graph", intermediate_output->name());
         auto intermediate_output_node = graphlib::create_node<graphlib::InputNode>(intermediate_output->name(), graphlib::InputNodeType::Activation, false);
         intermediate_output_node->set_shape(intermediate_output->shape());
         intermediate_output_node->set_output_df(intermediate_output->output_df());
@@ -290,12 +277,13 @@ std::unique_ptr<Graph> split_backward(const Graph *graph, const Graph *fwd_graph
     return bwd_graph;
 }
 
+// Splits the graph into multiple graphs which will be lowered to MLIR as different functions.
 ForgeGraphModule split_graph(graphlib::Graph* graph)
 {
     auto topo = graphlib::topological_sort(*graph);
 
-    auto fwd_graph = split_forward(graph, topo);
-    reportify::dump_graph(graph->name(), "split_fwd", fwd_graph.get());
+    auto fwd_graph = extract_forward_graph(graph, topo);
+    reportify::dump_graph(graph->name(), "extracted_fwd", fwd_graph.get());
 
     ForgeGraphModule module(graph->name(), fwd_graph.release());
 
@@ -304,8 +292,8 @@ ForgeGraphModule split_graph(graphlib::Graph* graph)
         return module;
     }
 
-    auto bwd_graph = split_backward(graph, module.get_graph(GraphType::Forward), topo);
-    reportify::dump_graph(graph->name(), "split_bwd", bwd_graph.get());
+    auto bwd_graph = extract_backward_graph(graph, module.get_graph(GraphType::Forward), topo);
+    reportify::dump_graph(graph->name(), "extracted_bwd", bwd_graph.get());
 
     module.set_graph(GraphType::Backward, bwd_graph.release());
     return module;

@@ -1,0 +1,33 @@
+# This workflow runs a schedule and uses the latest version of tt-mlir (origin/main branch)
+# to check if the latest version of tt-mlir is compatible with the current codebase.
+
+name: Integration
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '0 0 * * *'
+
+jobs:
+  docker-build:
+    uses: ./.github/workflows/docker-build.yml
+    secrets: inherit
+    with: 
+      tt-mlir-version: 'origin/main'
+
+  notify-failure:
+    needs: docker-build
+    if: ${{ always() && needs.docker-build.result == 'failure' }}
+    runs-on: ubuntu-latest    
+    steps:
+      - uses: actions/checkout@v4
+      - name: Create Issue
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+            gh issue create \
+            --title "Integration run failed" \
+            --body "The integration workflow failed in $RUN_URL" \
+            --label bug \
+            --assignee ${{ vars.INTEGRATION_OWNER }}

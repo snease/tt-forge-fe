@@ -130,6 +130,8 @@ void verify_input_tensors(const std::vector<torch::Tensor>& input_tensors, const
 
 std::vector<torch::Tensor> run_binary(runtime::Binary &binary, int program_idx, std::vector<torch::Tensor> const& inputs)
 {
+    auto input_descs = binary.getProgramInputs(program_idx);
+    verify_input_tensors(inputs, input_descs);
     auto& system = TTSystem::get_system();
 
     for (auto &device : system.devices)
@@ -148,9 +150,6 @@ std::vector<torch::Tensor> run_binary(runtime::Binary &binary, int program_idx, 
     }
 
     auto& device = *tt_device->rt_device;
-
-    auto input_descs = binary.getProgramInputs(program_idx);
-    verify_input_tensors(inputs, input_descs);
 
     std::vector<runtime::Tensor> rt_inputs;
     for (auto const& input : inputs)

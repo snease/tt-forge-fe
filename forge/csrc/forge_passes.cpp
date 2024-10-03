@@ -216,7 +216,7 @@ graphlib::Graph* run_pre_lowering_passes(
     bypass_embedding_input_nops(graph);
 
     // If there are any non-embedding users of the emdebbing table, it needs to be duplicated
-    duplicate_embedding_table_if_needed(graph);
+    // duplicate_embedding_table_if_needed(graph);
 
     //
     // Data formats

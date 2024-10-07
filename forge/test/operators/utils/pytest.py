@@ -31,6 +31,7 @@ class PyTestUtils:
 
 
 class PytestParamsUtils:
+
     @classmethod
     def strip_param_set(cls, value):
         if isinstance(value, ParameterSet):
@@ -40,3 +41,4 @@ class PytestParamsUtils:
     @classmethod
     def strip_param_sets(cls, values):
         return [cls.strip_param_set(value) for value in values]
+

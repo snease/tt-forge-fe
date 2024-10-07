@@ -50,5 +50,5 @@ __all__ = [
     "FailingReasons",
     "FailingReasonsValidation",
     "PyTestUtils",
-    "PytestParamsUtils",
+    'PytestParamsUtils',
 ]

@@ -1036,10 +1036,10 @@ def backward(type, attr, ac, operand, inputs, output, grad):
         ), f"Invalid broadcast dim after lowering: {attr[0]}"
  
         if attr[0] == 2 or attr[0] == 3:
-             ret = ac.op("reduce_sum", (grad,), (attr[0],))
+             ret = ac.op("reduce_sum", (grad,), (attr[0],), {"keep_dim": True})
         else:
             ret = ac.op(TransposeTM.create(attr[0], -2, z_dim_slice=grad.shape[-2]), [grad,])
-            ret = ac.op("reduce_sum", (ret,), (-2,))
+            ret = ac.op("reduce_sum", (ret,), (-2,), {"keep_dim": True})
             ret = ac.op(TransposeTM.create(attr[0], -2, z_dim_slice=ret.shape[-2]), [ret,])
         return ret 
 

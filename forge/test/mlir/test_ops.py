@@ -472,7 +472,8 @@ def test_sqrt(x_shape, y_shape):
 @pytest.mark.parametrize("vocab_size", [32000])
 @pytest.mark.parametrize("token_num", [12])
 @pytest.mark.parametrize("embedding_dim", [3200])
-def test_embedding(vocab_size, token_num, embedding_dim):
+@pytest.mark.parametrize("dtype", [torch.int32, torch.int64])
+def test_embedding(vocab_size, token_num, embedding_dim, dtype):
     compiler_cfg = forge.config._get_global_compiler_config()
     compiler_cfg.enable_tvm_cpu_fallback = False
 
@@ -485,7 +486,7 @@ def test_embedding(vocab_size, token_num, embedding_dim):
             return self.embedding(x)
 
     inputs = [
-        torch.randint(0, vocab_size, (1, token_num)).to(torch.int32),
+        torch.randint(0, vocab_size, (1, token_num)).to(dtype),
     ]
 
     framework_model = Embedding()

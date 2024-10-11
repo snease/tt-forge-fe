@@ -17,7 +17,7 @@ def test_mnist_training():
     torch.manual_seed(0)
 
     # Config
-    num_epochs = 2
+    num_epochs = 3
     batch_size = 1
     learning_rate = 0.001
 
@@ -68,6 +68,7 @@ def test_mnist_training():
             
             # Run backward pass on device
             loss.backward()
+            
             tt_model.backward(pred.grad)
 
             if batch_idx >= limit_num_batches:

@@ -3,7 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 #include "runtime.hpp"
-
+#include <iostream>
 #include <optional>
 
 #include "tt/runtime/runtime.h"
@@ -143,6 +143,7 @@ std::vector<torch::Tensor> run_binary(
         if (!device->is_open())
         {
             device->open_device();
+            std::cout << "Opened device" << std::endl;
         }
     }
 
@@ -179,6 +180,16 @@ std::vector<torch::Tensor> run_binary(
     }
 
     runtime::Event _ = runtime::submit(device, binary, program_idx, rt_inputs, rt_outputs);
+
+    // Close the device
+    for (auto &device : system.devices)
+    {
+        if (device->is_open())
+        {
+            device->close_device();
+            std::cout << "Closed device" << std::endl;
+        }
+    }
 
     return outputs;
 }

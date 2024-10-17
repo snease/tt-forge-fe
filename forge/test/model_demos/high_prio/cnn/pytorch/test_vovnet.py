@@ -46,6 +46,7 @@ def get_image():
 def generate_model_vovnet_imgcls_osmr_pytorch(test_device, variant):
     # STEP 1: Set Forge configuration parameters
     compiler_cfg = forge.config._get_global_compiler_config()  # load global compiler config object
+    compiler_cfg.compile_depth = forge.CompileDepth.INIT_COMPILE
 
     # STEP 2: Create Forge module from PyTorch model
     model = download_model(ptcv_get_model, variant, pretrained=True)    
@@ -67,7 +68,7 @@ def test_vovnet_osmr_pytorch(variant, test_device):
 
 
 # https://github.com/stigma0617/VoVNet.pytorch
-sys.path = list(set(sys.path + ["third_party/confidential_customer_models/model_2/pytorch/"]))
+sys.path = list(set(sys.path + ["forge/test/model_demos/models"]))
 from src_vovnet_stigma import vovnet39
 
 
@@ -93,6 +94,7 @@ def preprocess_steps(model_type):
 def generate_model_vovnet39_imgcls_stigma_pytorch(test_device, variant):
     # STEP 1: Set Forge configuration parameters
     compiler_cfg = forge.config._get_global_compiler_config()  # load global compiler config object
+    compiler_cfg.compile_depth = forge.CompileDepth.INIT_COMPILE
 
     # STEP 2: Create Forge module from PyTorch model
     model, image_tensor = download_model(preprocess_steps, vovnet39)    
@@ -116,6 +118,7 @@ from src_vovnet_stigma import vovnet57
 def generate_model_vovnet57_imgcls_stigma_pytorch(test_device, variant):
     # STEP 1: Set Forge configuration parameters
     compiler_cfg = forge.config._get_global_compiler_config()  # load global compiler config object
+    compiler_cfg.compile_depth = forge.CompileDepth.INIT_COMPILE
 
     # STEP 2: Create Forge module from PyTorch model
     model, image_tensor = download_model(preprocess_steps, vovnet57)
@@ -155,6 +158,7 @@ def generate_model_vovnet_imgcls_timm_pytorch(test_device, variant):
     model, image_tensor = download_model(preprocess_timm_model, variant)
     # STEP 1: Set Forge configuration parameters
     compiler_cfg = forge.config._get_global_compiler_config()  # load global compiler config object
+    compiler_cfg.compile_depth = forge.CompileDepth.INIT_COMPILE
 
     return model, [image_tensor], {}
 

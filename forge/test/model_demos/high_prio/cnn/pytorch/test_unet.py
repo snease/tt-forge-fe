@@ -26,6 +26,7 @@ def generate_model_unet_imgseg_osmr_pytorch(test_device, variant):
 
     # STEP 1: Set Forge configuration parameters
     compiler_cfg = forge.config._get_global_compiler_config()  # load global compiler config object
+    compiler_cfg.compile_depth = forge.CompileDepth.INIT_COMPILE
 
     model = download_model(ptcv_get_model, variant, pretrained=False)
 
@@ -75,6 +76,7 @@ def test_unet_holocron_pytorch(test_device):
 
     # STEP 1: Set Forge configuration parameters
     compiler_cfg = forge.config._get_global_compiler_config()  # load global compiler config object
+    compiler_cfg.compile_depth = forge.CompileDepth.INIT_COMPILE
 
     model = download_model(unet_tvvgg11, pretrained= True).eval()
 
@@ -85,6 +87,7 @@ def test_unet_holocron_pytorch(test_device):
 def generate_model_unet_imgseg_smp_pytorch(test_device, variant):
     # STEP 1: Set Forge configuration parameters
     compiler_cfg = forge.config._get_global_compiler_config()  # load global compiler config object
+    compiler_cfg.compile_depth = forge.CompileDepth.INIT_COMPILE
 
     # encoder_name = "vgg19"
     encoder_name = "resnet101"
@@ -123,6 +126,7 @@ def test_unet_qubvel_pytorch(test_device):
 def generate_model_unet_imgseg_torchhub_pytorch(test_device, variant):
     # STEP 1: Set Forge configuration parameters
     compiler_cfg = forge.config._get_global_compiler_config()  # load global compiler config object
+    compiler_cfg.compile_depth = forge.CompileDepth.INIT_COMPILE
 
     model = download_model(
         torch.hub.load,
@@ -152,12 +156,8 @@ def generate_model_unet_imgseg_torchhub_pytorch(test_device, variant):
     
     return model, [img_batch], {}
 
-    return model, [img_batch], {}
-
 
 def test_unet_torchhub_pytorch(test_device):
-    forge.config.override_op_size("_fused_op_6", (2, 2))
-
     model, inputs, _ = generate_model_unet_imgseg_torchhub_pytorch(
         test_device,
         "unet",

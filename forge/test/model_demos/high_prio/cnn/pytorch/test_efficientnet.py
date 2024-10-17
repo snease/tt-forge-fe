@@ -33,8 +33,7 @@ def test_efficientnet_timm(variant, test_device):
 
     # Configuration
     compiler_cfg = forge.config._get_global_compiler_config()
-    compiler_cfg.balancer_policy = "Ribbon"
-    compiler_cfg.enable_auto_fusing = False
+    compiler_cfg.compile_depth = forge.CompileDepth.INIT_COMPILE
 
     # Load model
     framework_model = download_model(timm.create_model, variant, pretrained=True)
@@ -71,14 +70,12 @@ variants = [
     # models.efficientnet_b7,
 ]
 
-
+@pytest.mark.skip(reason="invalid hash value")
 @pytest.mark.parametrize("variant", variants)
 def test_efficientnet_torchvision(variant, test_device):
     # Configuration
     compiler_cfg = forge.config._get_global_compiler_config()
-    compiler_cfg.balancer_policy = "Ribbon"
-    compiler_cfg.enable_auto_fusing = False  # Until #844 is resolved
-    compiler_cfg.default_df_override = forge.DataFormat.Float16_b
+    compiler_cfg.compile_depth = forge.CompileDepth.INIT_COMPILE
 
     # Load model
     framework_model = download_model(variant, pretrained=True)

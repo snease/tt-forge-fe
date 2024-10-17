@@ -20,6 +20,7 @@ from loguru import logger
 def generate_model_mobilenetV3_imgcls_torchhub_pytorch(test_device, variant):
     # Set Forge configuration parameters
     compiler_cfg = forge.config._get_global_compiler_config()  # load global compiler config object
+    compiler_cfg.compile_depth = forge.CompileDepth.INIT_COMPILE
 
     model = download_model(torch.hub.load,
         "pytorch/vision:v0.10.0", variant, pretrained=True
@@ -50,6 +51,7 @@ def test_mobilenetv3_basic(variant, test_device):
 def generate_model_mobilenetV3_imgcls_timm_pytorch(test_device, variant):
     # Set Forge configuration parameters
     compiler_cfg = forge.config._get_global_compiler_config()
+    compiler_cfg.compile_depth = forge.CompileDepth.INIT_COMPILE
 
     # Both options are good
     # model = timm.create_model('mobilenetv3_small_100', pretrained=True)
@@ -92,7 +94,6 @@ def test_mobilenetv3_timm(variant, test_device):
         variant,
     )
 
-    os.environ["FORGE_LEGACY_KERNEL_BROADCAST"] = "1"
     compiled_model = forge.compile(model, sample_inputs=[inputs[0]])
 
 

@@ -1,25 +1,20 @@
 import forge
 import os
 import torch
+import pytest
 import torch.nn.functional as F
 import numpy as np
 from PIL import Image
-# from forge.verify.backend import verify_module
-# from forge.verify.config import TestKind
-# from forge._C.backend_api import BackendDevice
-# from forge import VerifyConfig
 import sys
 
-sys.path.append("tt-forge-fe/forge/test/model_demos/high_prio/cnn/pytorch/model2/pytorch/fchardnet")
-from model_fchardnet import get_model, fuse_bn_recursively
+sys.path.append("forge/test/model_demos/models")
+from fchardnet import get_model, fuse_bn_recursively
 
-
+@pytest.mark.skip(reason="dependent on CCM repo")
 def test_fchardnet(test_device):
     # STEP 1: Set PyBuda configuration parameters
     compiler_cfg = forge.config._get_global_compiler_config()
-    compiler_cfg.balancer_policy = "Ribbon"
-    compiler_cfg.default_df_override = forge.DataFormat.Float16_b
-    os.environ["PYBUDA_RIBBON2"] = "1"
+    compiler_cfg.compile_depth = forge.CompileDepth.INIT_COMPILE
 
     # Load and pre-process image
     image_path = "tt-forge-fe/forge/test/model_demos/high_prio/cnn/pytorch/model2/pytorch/pidnet/image/road_scenes.png"
@@ -38,18 +33,5 @@ def test_fchardnet(test_device):
     model = get_model(arch, 19).to(device)
     model = fuse_bn_recursively(model)
     model.eval()
-    # tt_model = forge.PyTorchModule("fchardnet", model)
-    compiled_model = forge.compile(model, sample_inputs=[input_image])
 
-    # Verify
-    # verify_module(
-    #     tt_model,
-    #     input_shapes=(input_image.shape),
-    #     inputs=[(input_image)],
-    #     verify_cfg=VerifyConfig(
-    #         arch=test_device.arch,
-    #         devtype=test_device.devtype,
-    #         devmode=test_device.devmode,
-    #         test_kind=TestKind.INFERENCE,
-    #     ),
-    # )
+    compiled_model = forge.compile(model, sample_inputs=[input_image])

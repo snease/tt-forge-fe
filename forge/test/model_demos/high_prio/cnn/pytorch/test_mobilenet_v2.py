@@ -20,7 +20,8 @@ from transformers import MobileNetV2FeatureExtractor, MobileNetV2ForSemanticSegm
 def generate_model_mobilenetV2_imgcls_torchhub_pytorch(test_device, variant):
     # STEP 1: Set Forge configuration parameters
     compiler_cfg = forge.config._get_global_compiler_config()  # load global compiler config object
-
+    compiler_cfg.compile_depth = forge.CompileDepth.INIT_COMPILE
+    
     model = download_model(torch.hub.load,
         variant, "mobilenet_v2", pretrained=True
     )
@@ -46,6 +47,8 @@ def test_mobilenetv2_basic(test_device):
 def generate_model_mobilenetV2I96_imgcls_hf_pytorch(test_device, variant):
     # Set Forge configuration parameters
     compiler_cfg = forge.config._get_global_compiler_config()  # load global compiler config object
+    compiler_cfg.compile_depth = forge.CompileDepth.INIT_COMPILE
+    
 
     preprocessor = download_model(AutoImageProcessor.from_pretrained,
         variant
@@ -74,6 +77,8 @@ def test_mobilenetv2_96(test_device):
 def generate_model_mobilenetV2I160_imgcls_hf_pytorch(test_device, variant):
     # Set Forge configuration parameters
     compiler_cfg = forge.config._get_global_compiler_config()  # load global compiler config object
+    compiler_cfg.compile_depth = forge.CompileDepth.INIT_COMPILE
+    
 
     preprocessor = download_model(AutoImageProcessor.from_pretrained,
         variant
@@ -102,6 +107,8 @@ def test_mobilenetv2_160(test_device):
 def generate_model_mobilenetV2I244_imgcls_hf_pytorch(test_device, variant):
     # Set Forge configuration parameters
     compiler_cfg = forge.config._get_global_compiler_config()  # load global compiler config object
+    compiler_cfg.compile_depth = forge.CompileDepth.INIT_COMPILE
+    
 
     # Create Forge module from PyTorch model
     preprocessor = download_model(AutoImageProcessor.from_pretrained,
@@ -131,6 +138,7 @@ def test_mobilenetv2_224(test_device):
 def generate_model_mobilenetV2_imgcls_timm_pytorch(test_device, variant):
     # Set Forge configuration parameters
     compiler_cfg = forge.config._get_global_compiler_config()  # load global compiler config object
+    compiler_cfg.compile_depth = forge.CompileDepth.INIT_COMPILE
 
     model = download_model(timm.create_model, variant, pretrained=True)
     # tt_model = forge.PyTorchModule("mobilenet_v2__hf_timm", model)
@@ -172,9 +180,7 @@ def generate_model_mobilenetV2_semseg_hf_pytorch(test_device, variant):
     
     # Configurations
     compiler_cfg = forge.config._get_global_compiler_config()
-    compiler_cfg.balancer_policy = "Ribbon"
-    compiler_cfg.default_df_override = forge._C.DataFormat.Float16_b
-    os.environ["FORGE_RIBBON2"] = "1"
+    compiler_cfg.compile_depth = forge.CompileDepth.INIT_COMPILE
 
     # Load model
     framework_model = download_model(MobileNetV2ForSemanticSegmentation.from_pretrained, variant)

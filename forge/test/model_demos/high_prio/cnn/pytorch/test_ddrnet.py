@@ -21,7 +21,7 @@ from semseg import DualResNet, BasicBlock_seg
 
 variants = ["ddrnet23s", "ddrnet23", "ddrnet39"]
 
-
+@pytest.mark.skip(reason="dependent on CCM repo")
 @pytest.mark.parametrize("variant", variants)
 def test_ddrnet_pytorch(variant, test_device):
 
@@ -88,7 +88,7 @@ def test_ddrnet_pytorch(variant, test_device):
 
 variants = ["ddrnet23s_cityscapes", "ddrnet23_cityscapes"]
 
-
+@pytest.mark.skip(reason="dependent on CCM repo")
 @pytest.mark.parametrize("variant", variants)
 def test_ddrnet_semantic_segmentation_pytorch(variant, test_device):
 
@@ -132,7 +132,6 @@ def test_ddrnet_semantic_segmentation_pytorch(variant, test_device):
     model.load_state_dict(state_dict, strict=False)
     model.eval()
     model_name = f"pt_{variant}"
-    # tt_model = forge.PyTorchModule(model_name, model)
 
     # prepare input
     image_path = "third_party/confidential_customer_models/cv_demos/ddrnet/semantic_segmentation/image/road_scenes.png"
@@ -140,16 +139,3 @@ def test_ddrnet_semantic_segmentation_pytorch(variant, test_device):
     input_tensor = transforms.ToTensor()(input_image)
     input_batch = input_tensor.unsqueeze(0)
     compiled_model = forge.compile(model, sample_inputs=[input_batch])
-    
-    # Inference
-    # verify_module(
-    #     tt_model,
-    #     input_shapes=([input_batch.shape]),
-    #     inputs=([input_batch]),
-    #     verify_cfg=VerifyConfig(
-    #         arch=test_device.arch,
-    #         devtype=test_device.devtype,
-    #         devmode=test_device.devmode,
-    #         test_kind=TestKind.INFERENCE,
-    #     ),
-    # )

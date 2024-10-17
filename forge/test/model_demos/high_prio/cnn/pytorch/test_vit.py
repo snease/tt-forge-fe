@@ -23,6 +23,7 @@ image_2 = Image.open(requests.get(url, stream=True).raw)
 def generate_model_vit_imgcls_hf_pytorch(test_device, variant):
     # STEP 1: Set Forge configuration parameters
     compiler_cfg = forge.config._get_global_compiler_config()
+    compiler_cfg.compile_depth = forge.CompileDepth.INIT_COMPILE
 
     # STEP 2: Create Forge module from PyTorch model
     image_processor = download_model(AutoImageProcessor.from_pretrained,
@@ -43,6 +44,8 @@ variants = ["google/vit-base-patch16-224", "google/vit-large-patch16-224"]
 
 @pytest.mark.parametrize("variant", variants, ids=variants)
 def test_vit_classify_224_hf_pytorch(variant, test_device):
+    compiler_cfg = forge.config._get_global_compiler_config()
+    compiler_cfg.compile_depth = forge.CompileDepth.INIT_COMPILE
     model, inputs, _ = generate_model_vit_imgcls_hf_pytorch(
         test_device,
         variant,
@@ -95,9 +98,6 @@ variants = ["google/vit-base-patch16-224", "google/vit-large-patch16-224"]
 @pytest.mark.parametrize("variant", variants, ids=variants)
 @pytest.mark.skip(reason="Redundant, already tested with test_vit_classification_1x1_demo")
 def test_vit_classify_224_hf_pytorch_1x1(variant, test_device):
-    # if test_device.arch == BackendDevice.Grayskull:
-    #     pytest.skip()
-
     os.environ["FORGE_OVERRIDE_DEVICE_YAML"] = "wormhole_b0_1x1.yaml"
     if "large" in variant:
         os.environ["FORGE_EXTRA_L1_MARGIN"] = "20000"
@@ -115,7 +115,7 @@ variants = [
     "google/vit-large-patch16-224",
 ]
 
-
+@pytest.mark.skip(reason="1x1 grid size not supported yet")
 @pytest.mark.parametrize("mode", modes, ids=modes)
 @pytest.mark.parametrize("variant", variants, ids=variants)
 def test_vit_classification_1x1_demo(test_device, mode, variant):

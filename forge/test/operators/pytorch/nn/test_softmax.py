@@ -366,11 +366,14 @@ def get_test_params_sortmax_inconsistency():
     params = [
         # pytest.param((32, 64),   1, ModelFromAnotherOp, forge.DataFormat.Float16_b, forge.MathFidelity.HiFi4, id="(32, 64)-dim=1-model_type=ModelFromAnotherOp-df=Float16_b-mf=HiFi4"),
         # pytest.param((15, 4, 3), 0, ModelFromAnotherOp, forge.DataFormat.Float16_b, forge.MathFidelity.HiFi4, id="(15, 4 ,3)-dim=0-model_type=ModelFromAnotherOp-df=Float16_b-mf=HiFi4"),
+        # pytest.param((1, 160, 96), 1, ModelFromDramQueue, forge.DataFormat.Float16_b, forge.MathFidelity.HiFi4, id="(1, 160, 96)-dim=1-model_type=ModelFromDramQueue-df=Float16_b-mf=HiFi4"),
+        # pytest.param((1, 160, 96), 2, ModelFromDramQueue, forge.DataFormat.Float16_b, forge.MathFidelity.HiFi4, id="(1, 160, 96)-dim=2-model_type=ModelFromDramQueue-df=Float16_b-mf=HiFi4"),
+
         pytest.param((1, 160, 96), 0, ModelFromDramQueue, forge.DataFormat.Float16_b, forge.MathFidelity.HiFi4, id="(1, 160, 96)-dim=0-model_type=ModelFromDramQueue-df=Float16_b-mf=HiFi4"),
-        pytest.param((1, 160, 96), 1, ModelFromDramQueue, forge.DataFormat.Float16_b, forge.MathFidelity.HiFi4, id="(1, 160, 96)-dim=1-model_type=ModelFromDramQueue-df=Float16_b-mf=HiFi4"),
-        pytest.param((1, 160, 96), 2, ModelFromDramQueue, forge.DataFormat.Float16_b, forge.MathFidelity.HiFi4, id="(1, 160, 96)-dim=2-model_type=ModelFromDramQueue-df=Float16_b-mf=HiFi4"),
+        # pytest.param((1, 160, 96), 1, ModelFromDramQueue, forge.DataFormat.Float16_b, forge.MathFidelity.HiFi4, id="(1, 160, 96)-dim=1-model_type=ModelFromDramQueue-df=Float16_b-mf=HiFi4"),
+        # pytest.param((1, 160, 96), 2, ModelFromDramQueue, forge.DataFormat.Float16_b, forge.MathFidelity.HiFi4, id="(1, 160, 96)-dim=2-model_type=ModelFromDramQueue-df=Float16_b-mf=HiFi4"),
     ]
-    # params.reverse()      # COMMENT/UNCOMMENT THIS LINE TO CHANGE ORDER OF TESTS - test results inconsistency issue
+    params.reverse()      # COMMENT/UNCOMMENT THIS LINE TO CHANGE ORDER OF TESTS - test results inconsistency issue
     print("\n\n\nPARAMETERS:\n\n")
     for item in params:
         print(item.id)

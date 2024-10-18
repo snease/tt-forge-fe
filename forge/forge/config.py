@@ -176,7 +176,7 @@ class CompilerConfig:
     # instead of generating a direct forge graph from TVM, generate a forge python class
     compile_tvm_to_python: bool = True
     # Whether to keep generated python code, or load and delete
-    retain_tvm_python_files: bool = False
+    retain_tvm_python_files: bool = True
     # Defines store path of serilized TVM graphs.
     tvm_graph_store_path: str = ""
     # Defines load path of serilized TVM graphs.

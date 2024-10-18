@@ -670,6 +670,7 @@ def generate_initial_graph(context: CompileContext) -> CompileDepth:
             for name, value in module.named_parameters():
                 context.parameter_dict[name] = value
 
+    return CompileDepth.SPLIT_GRAPH
     return CompileDepth.POST_INITIAL_GRAPH_PASS
 
 

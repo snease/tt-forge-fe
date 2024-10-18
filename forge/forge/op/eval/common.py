@@ -242,6 +242,7 @@ def compare_with_golden_pcc(
         logger.trace(calculated)
         return True
     else:
+        logger.error(f"Pcc Value: {pcc_value}")
         logger.error("Tensor mismatch")
         return False
 

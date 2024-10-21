@@ -92,6 +92,7 @@ def test_densenet_121_pytorch(variant, test_device):
     if variant == "densenet121":
         model = download_model(torch.hub.load, "pytorch/vision:v0.10.0", "densenet121", pretrained=True)
         img_tensor = get_input_img()
+        print("inside if")
     else:
         model_name = "densenet121-res224-all"
         model = download_model(xrv.models.get_model, model_name)

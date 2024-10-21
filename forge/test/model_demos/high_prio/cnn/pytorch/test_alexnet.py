@@ -48,7 +48,7 @@ def test_alexnet_torchhub(test_device):
 def test_alexnet_osmr(test_device):
     # Configurations
     compiler_cfg = forge.config._get_global_compiler_config()
-    compiler_cfg.compile_depth = forge.CompileDepth.INIT_COMPILE
+    # compiler_cfg.compile_depth = forge.CompileDepth.INIT_COMPILE
 
     # Load model
     framework_model = download_model(ptcv_get_model, "alexnet", pretrained=True)

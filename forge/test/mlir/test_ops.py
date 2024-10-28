@@ -13,6 +13,72 @@ import forge
 from forge.op.eval.common import compare_with_golden_pcc, compare_with_golden
 from forge.tensor import to_forge_tensors, to_pt_tensors
 
+shapes = [
+    ((1, 1, 256, 256), (1)),
+    ((1, 12, 384, 384), (1)),
+    ((1, 1, 384, 384), (1)),
+    ((1, 12, 128, 128), (1)),
+    ((1, 1, 128, 128), (1)),
+    ((1, 1, 32, 32), (1)),
+]
+
+
+@pytest.mark.parametrize("shape_x, shape_y", shapes)
+def test_greater(shape_x, shape_y):
+    class greater(nn.Module):
+        def __init__(self):
+            super().__init__()
+            self.greater = torch.greater
+
+        def forward(self, x, y):
+            return self.greater(x, y)
+
+    x = torch.rand(shape_x)
+    y = torch.rand(shape_y)
+    print("x.shape", x.shape)
+    print("y.shape", y.shape)
+    framework_model = greater()
+    inputs = [x, y]
+
+    fw_out = framework_model(*inputs)
+    compiled_model = forge.compile(framework_model, sample_inputs=inputs)
+    co_out = compiled_model(*inputs)
+
+    co_out = [co.to("cpu") for co in co_out]
+    fw_out = [fw_out] if isinstance(fw_out, torch.Tensor) else fw_out
+    assert all([compare_with_golden_pcc(golden=fo, calculated=co, pcc=0.99) for fo, co in zip(fw_out, co_out)])
+
+
+shapes = [
+    ((1, 128), (1)),
+]
+
+
+@pytest.mark.parametrize("shape_x, shape_y", shapes)
+def test_not_equal(shape_x, shape_y):
+    class not_equal(nn.Module):
+        def __init__(self):
+            super().__init__()
+            self.not_equal = torch.ne
+
+        def forward(self, x, y):
+            return self.not_equal(x, y)
+
+    x = torch.rand(shape_x)
+    y = torch.rand(shape_y)
+    print("x.shape", x.shape)
+    print("y.shape", y.shape)
+    framework_model = not_equal()
+    inputs = [x, y]
+
+    fw_out = framework_model(*inputs)
+    compiled_model = forge.compile(framework_model, sample_inputs=inputs)
+    co_out = compiled_model(*inputs)
+
+    co_out = [co.to("cpu") for co in co_out]
+    fw_out = [fw_out] if isinstance(fw_out, torch.Tensor) else fw_out
+    assert all([compare_with_golden_pcc(golden=fo, calculated=co, pcc=0.99) for fo, co in zip(fw_out, co_out)])
+
 
 @pytest.mark.parametrize(
     "batch_size, num_channels, height, width",

@@ -112,45 +112,45 @@ void run_optimization_graph_passes(graphlib::Graph *graph)
     // Commuting to input may have introduced clones, so attempt to erase inverse ops again
     // ...
 
-    bool attempt_update = true;
-    while (attempt_update)
-    {
-        passes::hoist_unsqueeze_squeeze_to_reshape(graph);
+    // bool attempt_update = true;
+    // while (attempt_update)
+    // {
+    //     passes::hoist_unsqueeze_squeeze_to_reshape(graph);
 
-        bool skip_erase_redundant = false;
-        attempt_update = passes::erase_inverse_ops(graph);
-        if (not attempt_update)
-        {
-            attempt_update = passes::insert_inverse_on_outputs(graph);
-            if (attempt_update)
-                skip_erase_redundant = true;
-        }
-        if (not attempt_update)
-            attempt_update = passes::insert_inverse_on_inputs(graph);
-        if (not attempt_update)
-        {
-            attempt_update = passes::insert_inverse_on_downstream_tms(graph);
-            if (attempt_update)
-                skip_erase_redundant = true;
-        }
-        if (not attempt_update)
-            attempt_update = passes::replace_incommutable_patterns(graph);
+    //     bool skip_erase_redundant = false;
+    //     attempt_update = passes::erase_inverse_ops(graph);
+    //     if (not attempt_update)
+    //     {
+    //         attempt_update = passes::insert_inverse_on_outputs(graph);
+    //         if (attempt_update)
+    //             skip_erase_redundant = true;
+    //     }
+    //     if (not attempt_update)
+    //         attempt_update = passes::insert_inverse_on_inputs(graph);
+    //     if (not attempt_update)
+    //     {
+    //         attempt_update = passes::insert_inverse_on_downstream_tms(graph);
+    //         if (attempt_update)
+    //             skip_erase_redundant = true;
+    //     }
+    //     if (not attempt_update)
+    //         attempt_update = passes::replace_incommutable_patterns(graph);
 
-        // These passes erase tms for non-inverse reasons. Usually we are fine with this.
-        // However, we might insert tms on top or under of other tms for the purpose of erasing other inverse ops.
-        // Skip in that case
-        if (not skip_erase_redundant)
-        {
-            if (not attempt_update)
-                attempt_update = passes::erase_consecutive_reshape(graph, true);
+    //     // These passes erase tms for non-inverse reasons. Usually we are fine with this.
+    //     // However, we might insert tms on top or under of other tms for the purpose of erasing other inverse ops.
+    //     // Skip in that case
+    //     if (not skip_erase_redundant)
+    //     {
+    //         if (not attempt_update)
+    //             attempt_update = passes::erase_consecutive_reshape(graph, true);
 
-            // TODO: Figure out if this is needed. (Issue #152)
-            // if (not attempt_update)
-            //     attempt_update = passes::fuse_tm_sequences(graph);
+    //         // TODO: Figure out if this is needed. (Issue #152)
+    //         // if (not attempt_update)
+    //         //     attempt_update = passes::fuse_tm_sequences(graph);
 
-            passes::bypass_nop_tms(graph);
-        }
-    }
+    //         passes::bypass_nop_tms(graph);
+    //     }
+    // }
     passes::move_tm_through_requantize(graph);
     recalculate_shapes(graph);
 

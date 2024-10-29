@@ -50,8 +50,29 @@ void run_mlir_passes(mlir::OwningOpRef<mlir::ModuleOp> &mlir_module)
         return mlir::failure();
     };
 
+    // Create a string to store overrides for the override output layout option.
+    std::string override_output_layout = "override-output-layout=";
+    override_output_layout += "matmul_1=1x8:l1:width_sharded,";
+    override_output_layout += "add_2=1x8:l1:width_sharded,";
+    override_output_layout += "add_2_in_1_layout=1x8:l1:width_sharded,";
+    override_output_layout += "relu_3=1x8:l1:width_sharded,";
+    override_output_layout += "matmul_5=1x1:l1:width_sharded,";
+    override_output_layout += "add_6=1x1:l1:width_sharded,";
+    override_output_layout += "add_6_in_1_layout=1x1:l1:width_sharded,";
+    override_output_layout += "softmax_7=1x1:l1:width_sharded";
+
+    // Create a string to store overrides
+    std::string overrides = "";
+    overrides += "enable-optimizer=true ";
+    overrides += "sharding-pass-enabled=true ";
+    overrides += override_output_layout;
+
+    std::cout << std::endl;
+    std::cout << "Overrides: " << overrides << std::endl;
+    std::cout << std::endl;
+
     // Pipeline options are empty for now.
-    std::string options{""};
+    std::string options{overrides};
 
     auto result = pipelineInfo->addToPipeline(pm, options, err_handler);
     if (mlir::failed(result))

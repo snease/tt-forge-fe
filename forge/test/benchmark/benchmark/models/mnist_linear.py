@@ -25,7 +25,7 @@ MNIST_HIDDEN_SIZE_EXP_RANGE = [5, 7]
 MNIIST_HIDDEN_SIZE_FACTORS = [1, 3]
 
 MNIST_INPUT_FEATURE_SIZE = 784  # 784 = 28 * 28, default size of MNIST image
-MNIST_OUTPUT_FEATURE_SIZE = 10  # 10 classes in MNIST, default output size
+MNIST_OUTPUT_FEATURE_SIZE = 32  # 10 classes in MNIST, default output size
 MNIIST_HIDDEN_SIZE = 256  # Hidden layer size, default size
 
 BATCH_SIZE = [
@@ -89,7 +89,7 @@ def test_mnist_linear(
     if batch_size > 1:
         pytest.skip("Batch size greater than 1 not supported")
 
-    inputs = [torch.rand(batch_size, input_size)]
+    inputs = [torch.rand(32, input_size)]
 
     framework_model = MNISTLinear(input_size=input_size, hidden_size=hidden_size)
     fw_out = framework_model(*inputs)

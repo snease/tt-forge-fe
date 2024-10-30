@@ -13,6 +13,56 @@ import forge
 from forge.op.eval.common import compare_with_golden_pcc, compare_with_golden
 from forge.tensor import to_forge_tensors, to_pt_tensors
 
+
+def test_adaptive_avg_pool_2d():
+    class AdaptiveAvgPoolModel_debug(nn.Module):
+        def __init__(self, output_size):
+            super().__init__()
+            self.avg_pool = nn.AdaptiveAvgPool2d(output_size)
+
+        def forward(self, x):
+            return self.avg_pool(x)
+
+    framework_model = nn.AdaptiveAvgPool2d(output_size=(1, 1))
+    inputs = [torch.rand(1, 2048, 7, 7)]
+
+    fw_out = framework_model(*inputs)
+
+    compiled_model = forge.compile(framework_model, sample_inputs=inputs, module_name="adp_check")
+    co_out = compiled_model(*inputs)
+
+    co_out = [co.to("cpu") for co in co_out]
+    fw_out = [fw_out] if isinstance(fw_out, torch.Tensor) else fw_out
+
+
+def test_reshape_issue():
+    class reshape_issue(nn.Module):
+        def __init__(self):
+            super().__init__()
+            self.conv = nn.Conv2d(1024, 2048, kernel_size=(1, 1), stride=(1, 1), bias=False)
+            self.bn = nn.BatchNorm2d(2048, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+            self.relu = nn.ReLU(inplace=True)
+            self.avgpool = nn.AdaptiveAvgPool2d(output_size=(1, 1))
+
+        def forward(self, x):
+            x = self.conv(x)
+            x = self.bn(x)
+            x = self.relu(x)
+            x = self.avgpool(x)
+            return x
+
+    framework_model = reshape_issue()
+    inputs = [torch.rand(1, 1024, 7, 7)]
+
+    fw_out = framework_model(*inputs)
+
+    compiled_model = forge.compile(framework_model, sample_inputs=inputs, module_name="rs_check")
+    co_out = compiled_model(*inputs)
+
+    co_out = [co.to("cpu") for co in co_out]
+    fw_out = [fw_out] if isinstance(fw_out, torch.Tensor) else fw_out
+
+
 shapes = [(1, 1, 256, 256), (1, 1, 1, 128), (1, 1, 1, 384), (1, 1, 32, 32), (1, 1, 6, 6), (1, 1, 29, 29)]
 
 

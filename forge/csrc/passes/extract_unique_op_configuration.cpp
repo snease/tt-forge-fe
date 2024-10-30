@@ -153,9 +153,8 @@ void export_unique_op_configuration_to_csv_file(
             "Export Directory creation failed!");
     }
     std::string export_unique_op_config_file = export_unique_op_config_path + stage + ".csv";
-    std::string headers = "OpName-Operands Shape-Attributes";
-    std::string delimiter = "-";
-
+    std::string delimiter = env_as<std::string>("FORGE_EXPORT_UNIQUE_OP_CONFIG_CSV_DELIMITER", "/");
+    std::string headers = "OpName" + delimiter + "Shape" + delimiter + "Attributes";
     log_info(
         "Exporting unique ops configuration in {} compilation stage to {} file", stage, export_unique_op_config_file);
 
@@ -181,7 +180,7 @@ void export_unique_op_configuration_to_csv_file(
                     fs << op_name << delimiter << "[";
                     for (size_t j = 0; j < op_shapes.size(); j++)
                     {
-                        fs << op_shapes[j] << ", ";
+                        fs << op_shapes[j] << ",";
                     }
                     fs << "]" << delimiter;
                     if (op_attrs[i].attr.size() > 0 or op_attrs[i].named_attrs.size() > 0)
@@ -196,7 +195,7 @@ void export_unique_op_configuration_to_csv_file(
                 fs << op_name << delimiter << "[";
                 for (size_t i = 0; i < op_shapes.size(); i++)
                 {
-                    fs << op_shapes[i] << ", ";
+                    fs << op_shapes[i] << ",";
                 }
                 fs << "]" << delimiter;
                 fs << "\n";
@@ -207,12 +206,79 @@ void export_unique_op_configuration_to_csv_file(
     fs.close();
 }
 
+void export_unique_op_configuration_to_xlsx_file(
+    const UniqueOpShapesAttrsType &unique_op_shapes_attrs, std::string graph_name, std::string stage)
+{
+    std::string export_unique_op_config_default_path = std::filesystem::current_path().string();
+    std::string export_unique_op_config_path =
+        env_as<std::string>("FORGE_EXPORT_UNIQUE_OP_CONFIG_DIR_PATH", export_unique_op_config_default_path);
+    export_unique_op_config_path = export_unique_op_config_path + "/OpConfigs/" + graph_name + "/";
+    if (not std::filesystem::exists(std::filesystem::path(export_unique_op_config_path)))
+    {
+        TT_ASSERT(
+            std::filesystem::create_directories(std::filesystem::path(export_unique_op_config_path)),
+            "Export Directory creation failed!");
+    }
+    std::string export_unique_op_config_file = export_unique_op_config_path + stage + ".xlsx";
+
+    py::module my_module = py::module::import("forge.utils");
+
+    py::str py_export_unique_op_config_file_path = export_unique_op_config_file.c_str();
+    py::str py_graph_name = graph_name.c_str();
+    py::str py_stage = stage.c_str();
+    py::dict py_unique_op_shapes_attrs;
+
+    for (const auto &[op_name, shapes_attrs] : unique_op_shapes_attrs)
+    {
+        py::list py_shapes_attrs;
+        for (const auto &[shapes, attrs] : shapes_attrs)
+        {
+            py::list py_shapes;
+            for (const auto &shape : shapes)
+            {
+                py_shapes.append(shape.as_vector());
+            }
+            py::list py_attrs;
+            if (!attrs.empty())
+            {
+                for (const auto &attr : attrs)
+                {
+                    if (attr.attr.size() > 0 or attr.named_attrs.size() > 0)
+                        py_attrs.append(attr.as_string());
+                }
+            }
+            py_shapes_attrs.append(py::make_tuple(py_shapes, py_attrs));
+        }
+        py_unique_op_shapes_attrs[op_name.c_str()] = py_shapes_attrs;
+    }
+
+    // Call the export_unique_op_configuration_to_xslx_file Python function
+    py::bool_ export_status = my_module.attr("create_xlsx_file_from_unique_op_config")(
+        py_unique_op_shapes_attrs, py_graph_name, py_stage, py_export_unique_op_config_file_path);
+
+    if (export_status)
+    {
+        log_info(
+            "Successfully exported unique ops configuration in {} compilation stage to {} xlsx file",
+            stage,
+            export_unique_op_config_file);
+    }
+    else
+    {
+        log_warning(
+            "Problem in exporting unique ops configuration in {} compilation stage to {} xlsx file",
+            stage,
+            export_unique_op_config_file);
+    }
+}
+
 void extract_unique_op_configuration(
     graphlib::Graph *graph, std::string stage, const std::optional<std::vector<std::string>> &supported_ops)
 {
     auto stage_to_extract = env_as_optional<std::string>("FORGE_EXTRACT_UNIQUE_OP_CONFIG_AT");
     bool print_unique_op_config = env_as<bool>("FORGE_PRINT_UNIQUE_OP_CONFIG", false);
     bool export_unique_op_config_to_csv = env_as<bool>("FORGE_EXPORT_UNIQUE_OP_CONFIG_TO_CSV", false);
+    bool export_unique_op_config_to_xlsx = env_as<bool>("FORGE_EXPORT_UNIQUE_OP_CONFIG_TO_XLSX", false);
 
     if (not stage_to_extract or ((stage_to_extract != stage) and (stage_to_extract != "ALL")))
         return;
@@ -230,6 +296,10 @@ void extract_unique_op_configuration(
     if (export_unique_op_config_to_csv)
     {
         export_unique_op_configuration_to_csv_file(unique_op_shapes_attrs, graph->name(), stage);
+    }
+    if (export_unique_op_config_to_xlsx)
+    {
+        export_unique_op_configuration_to_xlsx_file(unique_op_shapes_attrs, graph->name(), stage);
     }
 }
 

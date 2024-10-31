@@ -1821,11 +1821,14 @@ class ModuleWrapper(ForgeModule):
 
 
 class Operation:
-    def __init__(self, function_name, output_name, node_name="", input_names=[], args=[], src_layer=None):
+    def __init__(
+        self, function_name, output_name, node_name="", input_names=[], args=[], src_layer=None, input_shapes=[]
+    ):
         self.function_name = function_name
         self.node_name = node_name
         self.output_name = output_name
         self.input_names = input_names
+        self.input_shapes = input_shapes
         self.args = args
         self.is_submodule_call = False
         self.inputs_to_delete = []
@@ -2008,10 +2011,10 @@ def generate_forge_module(
         devices.append(writer.dev)
         if writer.dev == "CPUDevice":
             forge_mod = forge.PyTorchModule(writer.module_name, TestClass())
-            forge_mod.module.process_framework_parameters(framework_mod.module)
+            forge_mod.module.process_framework_parameters()
         else:
             forge_mod = TestClass(writer.module_name)
-            forge_mod.process_framework_parameters(framework_mod.module)
+            forge_mod.process_framework_parameters()
             assert not any(
                 [param.value() is None for param in forge_mod.get_parameters()]
             ), f"Could not retrieve parameters from framework and tvm"
@@ -2357,6 +2360,7 @@ def compile_tvm_to_python(
                 if json_graph["device"] == "tt" and node["name"] == "embedding":
                     input_names = [input_names[1], input_names[0]]
 
+                # import pdb; pdb.set_trace()
                 ops[node["nid"]] = Operation(
                     function_name=function_name,
                     # node_name=node["forge_name"],
@@ -2364,6 +2368,10 @@ def compile_tvm_to_python(
                     input_names=input_names,
                     args=args,
                     src_layer=span_to_src_layer(node),
+                    input_shapes=[
+                        graph["nodes"][node["inputs"][input_port][0]]["forge_shape"]
+                        for input_port in range(int(node["attrs"]["num_inputs"]))
+                    ],
                 )
 
         if any([input is None for input in forge_inputs]):
@@ -2622,12 +2630,51 @@ def compile_tvm_to_python(
         if len(params_from_tvm):
             param_file_name = os.path.join(writer.module_directory, writer.module_name + "_params.pt")
             torch.save(params_from_tvm, param_file_name)
+        names_params_file_name = os.path.join(writer.module_directory, writer.module_name + "_names_params.pt")
+        named_parameters = dict(framework_mod.module.state_dict().items())
+        torch.save(named_parameters, names_params_file_name)
+        named_buffers_file_name = os.path.join(writer.module_directory, writer.module_name + "_named_buffers.pt")
+        named_buffers = dict(framework_mod.module.named_buffers())
+        torch.save(named_buffers, named_buffers_file_name)
 
         param_names.update(const_names)
-        writer.write_param_parser(param_names, param_file_name)
+        writer.write_param_parser(param_names, param_file_name, names_params_file_name, named_buffers_file_name)
         writer.close_file()
 
         modules.append(writer)
+
+        counter = 0
+        new_inputs = graph_input_names
+        for key in sorted(ops):
+            module_name = "test_" + current_module_name.lower() + str(counter)
+            # Initialize writer
+            writer = ForgeWriter(
+                module_name,
+                framework,
+                contains_incompatible_np_floats=contains_incompatible_np_floats,
+                delete_inputs=delete_inputs,
+            )
+            writer.write_header()
+            writer.write_class_definition(params, constants)
+
+            # Ops
+            single_op = {key: ops[key]}
+            new_inputs = {}
+            for i, input_name in enumerate(single_op[key].input_names):
+                # Param name, insert dummpy input
+                if "." in input_name:
+                    input_name = "dummy_input_" + str(i)
+                new_inputs[input_name] = input_name
+            single_return = {key: single_op[key].output_name}
+            writer.write_forward(single_op, new_inputs, single_return)
+            writer.write_param_parser(param_names, param_file_name, names_params_file_name, named_buffers_file_name)
+            writer.write_pytest_function(module_name, single_op[key].input_shapes)
+            writer.close_file()
+            modules.append(writer)
+
+            counter += 1
+
+    assert False
 
     if compiler_cfg.retain_tvm_python_files:
         save_writers_metadata(modules, flattened_pytorch_inputs, forge_inputs, graph_name)

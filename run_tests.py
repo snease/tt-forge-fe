@@ -1,8 +1,10 @@
 # SPDX-FileCopyrightText: (c) 2024 Tenstorrent AI ULC
 #
 # SPDX-License-Identifier: Apache-2.0
+# SPDX-License-Identifier: Apache-2.0
 import subprocess
 import os
+import time
 from datetime import datetime
 
 
@@ -24,6 +26,8 @@ def run_tests(test_directory, log_directory="test_logs"):
 
         print(f"Running test: {test_file}")
 
+        start_time = time.time()
+
         try:
             # Run each test file as a separate subprocess
             result = subprocess.run(["pytest", test_path], check=True, capture_output=True, text=True)
@@ -37,8 +41,9 @@ def run_tests(test_directory, log_directory="test_logs"):
                     f.write("=== STDOUT ===\n")
                     f.write(result.stdout)
 
+            elapsed_time = time.time() - start_time
             # Print pass message with clear formatting
-            print(f"\tPassed")
+            print(f"\tPassed ({elapsed_time:.2f} seconds)")
             summary["passed"] += 1
 
         except subprocess.CalledProcessError as e:
@@ -51,15 +56,17 @@ def run_tests(test_directory, log_directory="test_logs"):
                     f.write("=== STDOUT ===\n")
                     f.write(e.stdout)
 
+            elapsed_time = time.time() - start_time
             error_message = e.stderr
 
             # Print fail message with clear formatting
-            print(f"\tFailed")
+            print(f"\tFailed ({elapsed_time:.2f} seconds)")
             summary["failed"] += 1
             summary["failures"][test_file] = error_message
 
         except Exception as ex:
-            print(f"An unexpected error occurred while running {test_file}: {ex}")
+            elapsed_time = time.time() - start_time
+            print(f"An unexpected error occurred while running {test_file}: {ex} ({elapsed_time:.2f} seconds)")
 
     # Print and log summary
     print("\n=== Test Summary ===")

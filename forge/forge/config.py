@@ -160,7 +160,7 @@ class CompilerConfig:
     # Create "unsupported" forge ops in python file, allowing user to modify later
     enable_tvm_unsupported_ops: bool = False
     # Should we need to compare every op with framework output at each compilation stage.
-    enable_op_level_comparision: bool = False
+    enable_op_level_comparision: bool = True  # If disabled, it deallocate input tensors before compile run
     # Should we constant prop in tvm
     enable_tvm_constant_prop: bool = False
     # Convert framework params to relay params
@@ -176,7 +176,9 @@ class CompilerConfig:
     # instead of generating a direct forge graph from TVM, generate a forge python class
     compile_tvm_to_python: bool = True
     # Whether to keep generated python code, or load and delete
-    retain_tvm_python_files: bool = True
+    retain_tvm_python_files: bool = (
+        True  # If disabled, it will not retain generated model parameters, which are required for proper test run
+    )
     # Defines store path of serilized TVM graphs.
     tvm_graph_store_path: str = ""
     # Defines load path of serilized TVM graphs.

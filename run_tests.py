@@ -92,11 +92,6 @@ def run_tests(test_directory, log_directory="test_logs"):
     print(f"Tests passed: {summary['passed']}")
     print(f"Tests failed: {summary['failed']}")
 
-    if summary["failed"] > 0:
-        print("\nFailed Tests:")
-        for test, message in summary["failures"].items():
-            print(f"- {test}: {message}")
-
     # Write summary to a file with a timestamp
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     summary_file = os.path.join(log_directory, f"summary_{timestamp}.txt")
@@ -105,11 +100,6 @@ def run_tests(test_directory, log_directory="test_logs"):
         f.write(f"Total tests run: {len(test_files)}\n")
         f.write(f"Tests passed: {summary['passed']}\n")
         f.write(f"Tests failed: {summary['failed']}\n")
-
-        if summary["failed"] > 0:
-            f.write("\nFailed Tests:\n")
-            for test, message in summary["failures"].items():
-                f.write(f"- {test}: {message}\n")
 
 
 if __name__ == "__main__":

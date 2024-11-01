@@ -8,15 +8,19 @@ import time
 from datetime import datetime
 
 
-def extract_error_context(log_file, keyword="error", num_lines_before=0, num_lines_after=0):
+def extract_error_context(log_file, keyword="error", num_lines_before=0, num_lines_after=0, max_errors=None):
     """
     Extracts lines around the keyword from the log file.
     """
     context_lines = []
+    error_count = 0
     with open(log_file, "r") as f:
         lines = f.readlines()
         for i, line in enumerate(lines):
             if keyword in line.lower():
+                if max_errors is not None and error_count >= max_errors:
+                    break
+
                 start = max(i - num_lines_before, 0)
                 end = min(i + num_lines_after + 1, len(lines))
 
@@ -24,10 +28,19 @@ def extract_error_context(log_file, keyword="error", num_lines_before=0, num_lin
                 context_lines.append("---\n")  # Divider between error contexts
                 context_lines.append("".join(lines[start:end]))
                 context_lines.append("\n---\n")  # Divider between error contexts
+                error_count += 1
+
     return context_lines
 
 
-def run_tests(test_directory, log_directory="test_logs", num_lines_before=1, num_lines_after=5):
+def run_tests(
+    test_directory,
+    log_directory="test_logs",
+    num_lines_before=1,
+    num_lines_after=5,
+    max_errors=None,
+    max_tests_to_run=-1,
+):
     """
     Runs all pytest files in the given directory, logging each test's output separately.
     Creates a summary with pass/fail counts and specific error messages for failures.
@@ -40,7 +53,7 @@ def run_tests(test_directory, log_directory="test_logs", num_lines_before=1, num
     summary = {"passed": 0, "failed": 0, "failures": {}}
 
     for test_id, test_file in enumerate(test_files):
-        if test_id > 2:
+        if test_id > max_tests_to_run and max_tests_to_run > 0:
             break
 
         test_path = os.path.join(test_directory, test_file)
@@ -133,6 +146,7 @@ def run_tests(test_directory, log_directory="test_logs", num_lines_before=1, num
                     os.path.join(log_directory, f"{test}_log.txt"),
                     num_lines_before=num_lines_before,
                     num_lines_after=num_lines_after,
+                    max_errors=max_errors,
                 )
                 f.writelines(error_context)
 
@@ -140,4 +154,4 @@ def run_tests(test_directory, log_directory="test_logs", num_lines_before=1, num
 if __name__ == "__main__":
     # Set your test directory here
     test_directory = "./generated_modules"  # Adjust this path to your test directory
-    run_tests(test_directory)
+    run_tests(test_directory, max_errors=1, max_tests_to_run=-1)  # Adjust max_errors as needed

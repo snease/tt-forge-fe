@@ -29,8 +29,8 @@ def run_tests(test_directory, log_directory="test_logs"):
         start_time = time.time()
 
         try:
-            # Run each test file as a separate subprocess
-            result = subprocess.run(["pytest", test_path], check=True, capture_output=True, text=True)
+            # Run each test file as a separate subprocess with a timeout of 30 seconds
+            result = subprocess.run(["pytest", test_path], check=True, capture_output=True, text=True, timeout=30)
 
             # Log output to a file
             with open(log_file, "w") as f:
@@ -45,6 +45,24 @@ def run_tests(test_directory, log_directory="test_logs"):
             # Print pass message with clear formatting
             print(f"\tPassed ({elapsed_time:.2f} seconds)")
             summary["passed"] += 1
+
+        except subprocess.TimeoutExpired as e:
+            elapsed_time = time.time() - start_time
+            error_message = "Test timed out after 30 seconds"
+
+            # Do WH warm reset (potentially hang occurred)
+            print("\tWarm reset...")
+            os.system("/home/software/syseng/wh/tt-smi -lr all")
+
+            # Log timeout error to a file
+            with open(log_file, "w") as f:
+                f.write("=== TIMEOUT ===\n")
+                f.write(error_message)
+
+            # Print timeout message with clear formatting
+            print(f"\tFailed ({elapsed_time:.2f} seconds) - {error_message}")
+            summary["failed"] += 1
+            summary["failures"][test_file] = error_message
 
         except subprocess.CalledProcessError as e:
             # Log output to a file

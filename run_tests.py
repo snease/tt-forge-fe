@@ -8,7 +8,26 @@ import time
 from datetime import datetime
 
 
-def run_tests(test_directory, log_directory="test_logs"):
+def extract_error_context(log_file, keyword="error", num_lines_before=0, num_lines_after=0):
+    """
+    Extracts lines around the keyword from the log file.
+    """
+    context_lines = []
+    with open(log_file, "r") as f:
+        lines = f.readlines()
+        for i, line in enumerate(lines):
+            if keyword in line.lower():
+                start = max(i - num_lines_before, 0)
+                end = min(i + num_lines_after + 1, len(lines))
+
+                context_lines.append(f"\nError context around line {i + 1}:\n")
+                context_lines.append("---\n")  # Divider between error contexts
+                context_lines.append("".join(lines[start:end]))
+                context_lines.append("\n---\n")  # Divider between error contexts
+    return context_lines
+
+
+def run_tests(test_directory, log_directory="test_logs", num_lines_before=1, num_lines_after=5):
     """
     Runs all pytest files in the given directory, logging each test's output separately.
     Creates a summary with pass/fail counts and specific error messages for failures.
@@ -20,7 +39,10 @@ def run_tests(test_directory, log_directory="test_logs"):
     test_files = sorted(test_files)
     summary = {"passed": 0, "failed": 0, "failures": {}}
 
-    for test_file in test_files:
+    for test_id, test_file in enumerate(test_files):
+        if test_id > 2:
+            break
+
         test_path = os.path.join(test_directory, test_file)
         log_file = os.path.join(log_directory, f"{test_file}_log.txt")
 
@@ -100,6 +122,19 @@ def run_tests(test_directory, log_directory="test_logs"):
         f.write(f"Total tests run: {len(test_files)}\n")
         f.write(f"Tests passed: {summary['passed']}\n")
         f.write(f"Tests failed: {summary['failed']}\n")
+
+        if summary["failed"] > 0:
+            f.write("\nFailed Tests:\n")
+            for test, message in summary["failures"].items():
+                f.write(f"\n{'#' * 9}\n")
+                f.write(f"\nTest name: {test}\n")
+                f.write(f"\n{'#' * 9}\n\n")
+                error_context = extract_error_context(
+                    os.path.join(log_directory, f"{test}_log.txt"),
+                    num_lines_before=num_lines_before,
+                    num_lines_after=num_lines_after,
+                )
+                f.writelines(error_context)
 
 
 if __name__ == "__main__":

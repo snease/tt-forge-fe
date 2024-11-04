@@ -14,6 +14,62 @@ from forge.op.eval.common import compare_with_golden_pcc, compare_with_golden
 from forge.tensor import to_forge_tensors, to_pt_tensors
 
 
+@pytest.mark.parametrize("shape", [(1, 64, 56, 56)])
+def test_conv2d_issue(shape):
+    class conv2d(nn.Module):
+        def __init__(self):
+            super().__init__()
+            self.layer1_conv1 = nn.Conv2d(64, 128, kernel_size=(1, 1), stride=(1, 1), bias=False)
+
+        def forward(self, x):
+            x = self.layer1_conv1(x)
+            return x
+
+    inputs = [torch.rand(shape)]
+    framework_model = conv2d()
+    print(" model:", framework_model)
+
+    fw_out = framework_model(*inputs)
+
+    compiled_model = forge.compile(framework_model, sample_inputs=inputs, module_name="conv_s_1")
+    co_out = compiled_model(*inputs)
+
+    co_out = [co.to("cpu") for co in co_out]
+    fw_out = [fw_out] if isinstance(fw_out, torch.Tensor) else fw_out
+    assert all([compare_with_golden_pcc(golden=fo, calculated=co, pcc=0.99) for fo, co in zip(fw_out, co_out)])
+
+
+@pytest.mark.parametrize("shape", [(1, 64, 56, 56)])
+def test_stride_issue(shape):
+    class SimpleConvBnWrapper(nn.Module):
+        def __init__(self):
+            super().__init__()
+            self.layer1_conv1 = nn.Conv2d(64, 128, kernel_size=(1, 1), stride=(1, 1), bias=False)
+            self.layer1_bn1 = nn.BatchNorm2d(128, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+            self.layer1_conv2 = nn.Conv2d(128, 128, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False)
+            self.layer1_bn2 = nn.BatchNorm2d(128, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+
+        def forward(self, x):
+            x = self.layer1_conv1(x)
+            x = self.layer1_bn1(x)
+            x = self.layer1_conv2(x)
+            x = self.layer1_bn2(x)
+            return x
+
+    inputs = [torch.rand(shape)]
+    framework_model = SimpleConvBnWrapper()
+    print(" model:", framework_model)
+
+    fw_out = framework_model(*inputs)
+
+    compiled_model = forge.compile(framework_model, sample_inputs=inputs, module_name="stride_s_1")
+    co_out = compiled_model(*inputs)
+
+    co_out = [co.to("cpu") for co in co_out]
+    fw_out = [fw_out] if isinstance(fw_out, torch.Tensor) else fw_out
+    assert all([compare_with_golden_pcc(golden=fo, calculated=co, pcc=0.99) for fo, co in zip(fw_out, co_out)])
+
+
 @pytest.mark.parametrize(
     "shape", [(1, 1, 256, 256), (1, 1, 1, 128), (1, 1, 1, 384), (1, 1, 32, 32), (1, 1, 6, 6), (1, 1, 29, 29)]
 )

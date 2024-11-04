@@ -86,7 +86,7 @@ def test_densenet_121_pytorch(variant, test_device):
 
     # STEP 1: Set Forge configuration parameters
     compiler_cfg = forge.config._get_global_compiler_config()  # load global compiler config object
-    compiler_cfg.compile_depth = forge.CompileDepth.GENERATE_INITIAL_GRAPH
+    # compiler_cfg.compile_depth = forge.CompileDepth.GENERATE_INITIAL_GRAPH
 
     # STEP 2: Create Forge module from PyTorch model
     if variant == "densenet121":

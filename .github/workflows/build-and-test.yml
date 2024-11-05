@@ -3,6 +3,7 @@ name: Build and Test
 on:
   workflow_dispatch:
   workflow_call:
+  push:
 
 jobs:
 
@@ -52,8 +53,8 @@ jobs:
       fail-fast: false
       matrix:
         build:
-          - runs-on: runner
-        test_group_id: [1,2]
+          - runs-on: performance
+        test_group_id: [1,2,3,4]
 
     runs-on:
       - in-service
@@ -135,7 +136,7 @@ jobs:
         source env/activate
         set -o pipefail # Ensures that the exit code reflects the first command that fails
         pip install pytest-split
-        pytest --splits 2 \
+        pytest --splits 4 \
                --group ${{ matrix.test_group_id }} \
                --splitting-algorithm least_duration \
                --junit-xml=${{ steps.strings.outputs.test_report_path }} \

@@ -23,7 +23,6 @@ class LlamaModelWrapper(torch.nn.Module):
         2) use_cache = True
             input_id (`torch.Tensor`) - shape of (batch_size, 1)
             attention_mask (`torch.Tensor`) -  shape of (batch_size, key_value_seq_len + 1)
-            position_ids (`torch.Tensor`) -  shape of (batch_size, 1)
             past_key_values (`List[List[torch.Tensor, torch.Tensor]]`)
                         key/values shape: (batch_size, num_of_key_values_heads, key_value_seq_len, head_dim)
 
@@ -41,7 +40,7 @@ class LlamaModelWrapper(torch.nn.Module):
         self.model = model
         self.embed_tokens = model.model.embed_tokens
 
-    def forward(self, input_ids, attention_mask, position_ids=None, past_key_values=None):
+    def forward(self, input_ids, attention_mask, past_key_values=None):
 
         inputs_embeds = self.embed_tokens(input_ids)
 
@@ -53,6 +52,9 @@ class LlamaModelWrapper(torch.nn.Module):
         causal_attention_mask = _prepare_4d_causal_attention_mask(
             attention_mask, input_ids.shape, inputs_embeds, past_key_values_length
         )
+        position_ids = self.model.prepare_inputs_for_generation(
+            input_ids, past_key_values, attention_mask, use_cache=self.model.config.use_cache
+        )["position_ids"]
         model_outputs = self.model(
             attention_mask=causal_attention_mask,
             position_ids=position_ids,
@@ -66,7 +68,7 @@ class LlamaModelWrapper(torch.nn.Module):
         return model_outputs.logits
 
 
-def calculate_attention_mask_and_postion_ids(
+def calculate_attention_mask(
     padded_past_key_values_seq_length, non_padding_past_key_values_seq_length, input_seq_length
 ):
 
@@ -75,16 +77,7 @@ def calculate_attention_mask_and_postion_ids(
     attention_mask[:non_padding_past_key_values_seq_length] = 1
     attention_mask[-1] = 1
     attention_mask = attention_mask.unsqueeze(0)
-
-    # Calculate position ids
-    position_ids = torch.arange(
-        non_padding_past_key_values_seq_length,
-        input_seq_length + non_padding_past_key_values_seq_length,
-        dtype=torch.long,
-    )
-    position_ids = position_ids.unsqueeze(0)
-
-    return attention_mask, position_ids
+    return attention_mask
 
 
 @pytest.mark.parametrize("run_on_tt_device", [False, True])
@@ -184,6 +177,7 @@ def test_llama_prefill_on_cpu_decode_on_tt_no_cache(run_on_tt_device):
     print("generated_text=", generated_text)
 
 
+# pytest forge/test/mlir/llama/tests/test_llama_decode.py::test_llama_prefill_on_cpu_decode_on_tt_cache -vss &> test_cache.log
 @pytest.mark.parametrize("run_on_tt_device", [False, True])
 def test_llama_prefill_on_cpu_decode_on_tt_cache(run_on_tt_device):
 
@@ -236,16 +230,16 @@ def test_llama_prefill_on_cpu_decode_on_tt_cache(run_on_tt_device):
         )
 
     if run_on_tt_device:
-        # Calculate attention mask and postion_ids
+        # Calculate attention mask
         padded_past_key_values_seq_length = model_inputs[1][0][0].shape[-2]
         input_seq_length = model_inputs[0].shape[-1]
-        attention_mask, position_ids = calculate_attention_mask_and_postion_ids(
+        attention_mask = calculate_attention_mask(
             padded_past_key_values_seq_length, non_padding_seq_length, input_seq_length
         )
 
         # Compile the model
         compiled_model = forge.compile(
-            framework_model, sample_inputs=[model_inputs[0], attention_mask, position_ids, model_inputs[1]]
+            framework_model, sample_inputs=[model_inputs[0], attention_mask, model_inputs[1]]
         )
         pytest.xfail("Found Unsupported operations while lowering from TTForge to TTIR in forward graph.")
 
@@ -256,12 +250,12 @@ def test_llama_prefill_on_cpu_decode_on_tt_cache(run_on_tt_device):
         non_padding_past_key_values_seq_length = non_padding_seq_length + max_new_tokens_idx
         padded_past_key_values_seq_length = model_inputs[1][0][0].shape[-2]
         input_seq_length = model_inputs[0].shape[-1]
-        attention_mask, position_ids = calculate_attention_mask_and_postion_ids(
+        attention_mask = calculate_attention_mask(
             padded_past_key_values_seq_length, non_padding_past_key_values_seq_length, input_seq_length
         )
 
         # CPU Inference
-        model_outputs = framework_model(model_inputs[0], attention_mask, position_ids, model_inputs[1])
+        model_outputs = framework_model(model_inputs[0], attention_mask, model_inputs[1])
 
         # TT will return the logits and past key values as list of tensor, so flattening
         # framework output past key values from List(List(Key1, Values1), ... , List(Key26, Values26)) to
@@ -273,7 +267,7 @@ def test_llama_prefill_on_cpu_decode_on_tt_cache(run_on_tt_device):
 
         if run_on_tt_device:
             # Run on TT device
-            tt_inputs = [model_inputs[0], attention_mask, position_ids, model_inputs[1]]
+            tt_inputs = [model_inputs[0], attention_mask, model_inputs[1]]
             tt_output = compiled_model(*tt_inputs)
             tt_output = [tt_out.to("cpu") for tt_out in tt_output]
 
@@ -322,3 +316,33 @@ def test_llama_prefill_on_cpu_decode_on_tt_cache(run_on_tt_device):
     # Generated text
     generated_text = tokenizer.decode(generated_tokens[0], skip_special_tokens=True)
     print("generated_text=", generated_text)
+
+
+def test_llama_position_id_calculation():
+    class PositionIdModelWrapper(torch.nn.Module):
+        def __init__(self):
+            super().__init__()
+
+        def forward(self, attention_mask):
+            position_ids = attention_mask.long().cumsum(-1) - 1
+            position_ids.masked_fill_(attention_mask == 0, 1)
+            return position_ids
+
+    framework_model = PositionIdModelWrapper()
+    framework_model.eval()
+
+    # Sample Input
+    attention_mask = torch.zeros((1, 20)).to(torch.float32)
+    attention_mask[:, :12] = 1
+
+    # Cpu Inference
+    framework_out = framework_model(attention_mask)
+
+    # Compile and Run the model on tt device
+    tt_inputs = [attention_mask]
+    compiled_model = forge.compile(framework_model, sample_inputs=tt_inputs)
+
+    tt_output = compiled_model(*tt_inputs)
+    tt_output = [tt_out.to("cpu") for tt_out in tt_output]
+
+    assert compare_with_golden(golden=framework_out, calculated=tt_output[0], pcc=0.99)

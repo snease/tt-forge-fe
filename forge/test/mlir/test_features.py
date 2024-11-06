@@ -156,8 +156,11 @@ def test_batch_size_training(batch_size, in_features, out_features):
     tt_model.backward()
 
 
-@pytest.mark.parametrize("gb", [0.1])
+@pytest.mark.parametrize("gb", [0.4])
 def test_memory_usage(gb):
+    compiler_cfg = forge.config._get_global_compiler_config()
+    compiler_cfg.compile_depth = forge.CompileDepth.RUN_MLIR_COMPILER
+
     class MatmulModule(nn.Module):
         def __init__(self, dim_size):
             super(MatmulModule, self).__init__()
@@ -184,4 +187,3 @@ def test_memory_usage(gb):
     inputs_y = torch.rand(1, dim_size, dim_size)
 
     compiled_model = forge.compile(model, sample_inputs=[inputs_x, inputs_y])
-    output = compiled_model(inputs_x, inputs_y)

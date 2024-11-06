@@ -1339,7 +1339,12 @@ def consteval_tensor(
 
 
 def consteval_input(consteval_trace, name: str, inputs: Dict[str, torch.Tensor], is_forge: bool) -> torch.Tensor:
-    return consteval_tensor(consteval_trace, name, inputs, is_forge, "Forward")
+    const_eval_tensor = consteval_tensor(consteval_trace, name, inputs, is_forge, "Forward")
+    # We need to change stride of new tensor explicitly by creating new tensor with shape of const_eval_tensor,
+    # and copying the values of const_eval_tensor to it.
+    # This will create tensor with contiguous memory layout consistent with its current shape.
+    # For example, if we had transpose in consteval trace, output tensor would have stride same as input. However, since we store that input as constant tensor, its shape defines its stride.
+    return torch.empty(const_eval_tensor.shape).copy_(const_eval_tensor)
 
 
 def consteval_shape(compiled_graph_state, name: str, tensor: torch.Tensor, is_forge: bool = False) -> torch.Tensor:
@@ -1359,7 +1364,12 @@ def consteval_shape(compiled_graph_state, name: str, tensor: torch.Tensor, is_fo
 
 def consteval_input_bw(compiled_graph_state, name: str, tensor: torch.Tensor, is_forge: bool) -> torch.Tensor:
     inputs = {name: tensor}
-    return consteval_tensor(compiled_graph_state.consteval_trace, name, inputs, is_forge, "Backward")
+    const_eval_tensor = consteval_tensor(compiled_graph_state.consteval_trace, name, inputs, is_forge, "Backward")
+    # We need to change stride of new tensor explicitly by creating new tensor with shape of const_eval_tensor,
+    # and copying the values of const_eval_tensor to it.
+    # This will create tensor with contiguous memory layout consistent with its current shape.
+    # For example, if we had transpose in consteval trace, output tensor would have stride same as input. However, since we store that input as constant tensor, its shape defines its stride.
+    return torch.empty(const_eval_tensor.shape).copy_(const_eval_tensor)
 
 
 def compare_tensors(t0, t1):
@@ -1413,6 +1423,8 @@ def get_post_const_eval_tensors(
 
     for input_name in ordered_input_names:
         # Load input constant tensors for consteval
+        if input_name == "input_1_add_18":
+            print("input_1_add_18")
         inputs = get_constant_inputs(
             constant_nodes, device_constant_and_parameters, consteval_trace, input_name, is_forge, "Forward"
         )

@@ -362,6 +362,10 @@ class ForgeWriter(PythonWriter):
             self.indent -= 1
             self.indent -= 1
 
+            self.wl("del named_parameters")
+            self.wl("del named_buffers")
+            self.wl("del serialized_params")
+
             self.indent = 0
 
         elif self.framework == "tensorflow":

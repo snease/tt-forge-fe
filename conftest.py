@@ -56,6 +56,11 @@ def memory_usage_tracker():
             max_mem = max(max_mem, current_mem)
             total_mem += current_mem
             count += 1
+
+            print(
+                f"Memory usage: {current_mem:.2f} MB; Min: {min_mem:.2f} MB; Max: {max_mem:.2f} MB; Avg: {total_mem / count:.2f} MB"
+            )
+
             time.sleep(0.1)  # Adjust the interval as needed
 
     # Start tracking in a background thread

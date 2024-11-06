@@ -1988,25 +1988,33 @@ def generate_forge_module(
 ):
     global counter
 
+    logger.debug("Starting generate_forge_module")
+
     if compiler_cfg is None:
         compiler_cfg = _get_global_compiler_config()
+        logger.debug("Loaded global compiler config")
 
     if verify_cfg is None:
         verify_cfg = _get_global_verify_config()
+        logger.debug("Loaded global verify config")
 
     pytorch_inputs = to_pt_tensors(inputs)
+    logger.debug("Converted inputs to PyTorch tensors")
 
     if graph_name is None:
         graph_name = framework_mod.name
+        logger.debug(f"Set graph name to {graph_name}")
 
     reload = bool(int(os.environ.get("FORGE_RELOAD_GENERATED_MODULES", "0")))
     if reload and not compiler_cfg.retain_tvm_python_files:
         compiler_cfg.retain_tvm_python_files = True
         if not os.path.exists(metadata_path(graph_name)):
             reload = False
+        logger.debug(f"Reload set to {reload}")
 
     if verify_cfg is not None and verify_cfg.verify_forge_codegen_vs_framework:
         framework_outputs = framework_mod.cpu_eval_forward(*pytorch_inputs)
+        logger.debug("Evaluated framework outputs")
 
     if not reload:
         module_name = graph_name if counter == 0 else f"{graph_name}_{counter}"
@@ -2019,37 +2027,52 @@ def generate_forge_module(
             verify_cfg=verify_cfg,
             input_names=input_names,
         )
+        logger.debug(f"Compiled TVM to Python with module name {module_name}")
     else:
         module_writers, flattened_inputs = load_writers_metadata(graph_name, inputs)
+        logger.debug("Loaded writers metadata")
 
     counter += 1
     sys.path.append(".")
+    logger.debug("Appended current directory to sys.path")
 
     forge_mods = []
     devices = []
     for writer in module_writers:
         module = importlib.import_module(writer.import_module_path())
         module = importlib.reload(module)
+        logger.debug(f"Imported and reloaded module {writer.import_module_path()}")
 
         TestClass = getattr(module, writer.class_name)
-
         devices.append(writer.dev)
+        logger.debug(f"Appended device {writer.dev}")
+
         if writer.dev == "CPUDevice":
             forge_mod = forge.PyTorchModule(writer.module_name, TestClass())
             forge_mod.module.process_framework_parameters(framework_mod.module)
+            logger.debug(f"Processed framework parameters for CPU device")
         else:
+            logger.debug(f"Creating forge module {TestClass}")
             forge_mod = TestClass(writer.module_name)
+            logger.debug(f"Created forge module {TestClass}")
 
             if isinstance(framework_mod, forge.module.PyTorchModule):
+                del framework_mod
+                framework_mod = None
+                import gc
+
+                gc.collect()
                 forge_mod.process_framework_parameters()
             else:
                 forge_mod.process_framework_parameters(framework_mod.module)
+            logger.debug(f"Processed framework parameters for non-CPU device")
 
             assert not any(
                 [param.value() is None for param in forge_mod.get_parameters()]
             ), f"Could not retrieve parameters from framework and tvm"
 
         forge_mods.append(forge_mod)
+        logger.debug(f"Appended forge module {forge_mod}")
 
         if not compiler_cfg.retain_tvm_python_files:
             global generated_files
@@ -2057,19 +2080,24 @@ def generate_forge_module(
             param_filename = os.path.join(writer.module_directory, writer.module_name + "_params.pt")
             if os.path.exists(param_filename):
                 generated_files.append(os.path.abspath(param_filename))
+            logger.debug(f"Appended generated files")
 
             if not clean_later:
                 cleanup_temporary_files()
+                logger.debug("Cleaned up temporary files")
 
     if devices[0] == "CPUDevice":
         forge_inputs = forge.tensor.to_pt_tensors(flattened_inputs)
     else:
         forge_inputs = forge.tensor.to_forge_tensors(flattened_inputs)
+    logger.debug("Converted flattened inputs to forge tensors")
 
     if verify_cfg is not None and verify_cfg.verify_forge_codegen_vs_framework:
         forge_outputs = get_forge_outputs(forge_mods, devices, forge_inputs)
         verify_framework_vs_forge_codegen(framework_outputs, forge_outputs, verify_cfg=verify_cfg)
+        logger.debug("Verified framework vs forge codegen")
 
+    logger.debug("Finished generate_forge_module")
     return forge_mods, devices, forge_inputs
 
 
@@ -2078,10 +2106,14 @@ def compile_tvm_to_python(
 ):
     if compiler_cfg is None:
         compiler_cfg = _get_global_compiler_config()
+    logger.trace("Loaded compiler configuration")
 
     is_training = False if verify_cfg == None else verify_cfg.test_kind.is_training()
+    logger.trace(f"Is training: {is_training}")
 
     framework = get_framework(framework_mod)
+    logger.trace(f"Framework: {framework}")
+
     if framework == "pytorch":
         if is_training:
             framework_mod.module.train()
@@ -2089,15 +2121,15 @@ def compile_tvm_to_python(
             logger.warning("Cannot verify TVM output vs. framework in training mode.")
         else:
             framework_mod.module.eval()
+        logger.trace("Set PyTorch module to training/evaluation mode")
 
-    # Path is needed for Onnx model verification against TVM compile.
     path = None
     if isinstance(framework_mod, OnnxModule):
         path = framework_mod.onnx_path
     elif isinstance(framework_mod, TFLiteModule):
         path = framework_mod.tflite_path
+    logger.trace(f"Model path: {path}")
 
-    # Load here to avoid importing tvm unnecessarily when this file is loaded
     from tvm.contrib.forge_compile import load_tvm_graph
 
     json_graphs, flattened_pytorch_inputs, weights = load_tvm_graph(
@@ -2110,6 +2142,7 @@ def compile_tvm_to_python(
         verify_cfg=verify_cfg,
         input_names=input_names,
     )
+    logger.trace("Loaded TVM graph")
 
     def _determine_node_dtype(node):
         if node["attrs"]["framework_dtype"] != "N/A":
@@ -2131,11 +2164,13 @@ def compile_tvm_to_python(
     modules = []
     for graph_index, json_graph in enumerate(json_graphs):
         graph = json.loads(json_graph["graph"])
+        logger.trace(f"Loaded JSON graph {graph_index}")
 
         is_cpu_pre = graph_index == 0 and json_graph["device"] == "cpu"
 
         output_nodes = [head[0] for head in graph["heads"]]
-        # reshape nops are added in tvm to passthrough nodes, prune them
+        logger.trace(f"Output nodes: {output_nodes}")
+
         def is_nop_reshape(nid):
             node = graph["nodes"][nid]
             if node["name"] != "reshape":
@@ -2146,6 +2181,7 @@ def compile_tvm_to_python(
             return input_shape == node_shape
 
         input_nodes = graph["arg_nodes"]
+        logger.trace(f"Input nodes: {input_nodes}")
 
         graph_input_names = {}
         params = {}
@@ -2166,15 +2202,13 @@ def compile_tvm_to_python(
             elif framework == "tflite":
                 node["forge_name"] = node["forge_name"].replace(".", "_").replace("/", "_").replace(":", "_")
 
-            # Preventing variable names starting with an integer in generated python
             if node["forge_name"][0] in [f"{n}" for n in range(10)]:
                 node["forge_name"] = f"{node_type}_{node['name']}"
 
-        # Clean up Forge name
         for node in graph["nodes"]:
             node["forge_name"] = node["name"]
+        logger.trace("Cleaned up Forge names")
 
-        # Check for unsupported ops
         has_unsupported_ops = False
         json_graph_op_map = tvm_to_forge_op_map if json_graph["device"] == "tt" else tvm_to_pytorch_op_map
         for nid, node in enumerate(graph["nodes"]):
@@ -2193,6 +2227,7 @@ def compile_tvm_to_python(
             assert (
                 compiler_cfg.enable_tvm_unsupported_ops
             ), "Encountered unsupported op types. Check error logs for more details"
+        logger.trace("Checked for unsupported ops")
 
         for nid, node in enumerate(graph["nodes"]):
 
@@ -2203,7 +2238,6 @@ def compile_tvm_to_python(
             if node["op"] == "input":
                 if node["name"] not in weights:
                     make_parser_friendly_name(node, "input_")
-                    # TVM might not preserve input order; check json graph
                     inp_idx = nid
                     if "nid_to_input_idx" in json_graph.keys() and len(json_graph["nid_to_input_idx"]) != 0:
                         inp_idx = json_graph["nid_to_input_idx"][nid]
@@ -2217,8 +2251,6 @@ def compile_tvm_to_python(
                     tensor.requires_grad = requires_grad
 
                     if (requires_grad or json_graph["device"] == "cpu") and len(tensor.shape) > 0:
-                        # CPU PyTorch module requires non-trainable weights in a nn.Parameter with
-                        # requires_grad=False, a constant buffer does not work.
                         params[node["nid"]] = (
                             node["forge_name"],
                             node["forge_shape"],
@@ -2321,8 +2353,6 @@ def compile_tvm_to_python(
 
                 assert "num_inputs" in node["attrs"]
 
-                # TVM nn.pad has 2 inputs [Data, pad_value]
-                # We need to assert pad_value being zero, then remove the constant
                 if node["name"] == "nn.pad" and int(node["attrs"]["num_inputs"]) == 2:
                     pad_value_node = graph["nodes"][node["inputs"][1][0]]
                     pad_value_node_name = pad_value_node["name"]
@@ -2379,7 +2409,7 @@ def compile_tvm_to_python(
                         input_node["users"] = []
                     input_node["users"].append(nid)
                     input_names.append(input_node["forge_name"])
-                # Handle concatenate case when a single node name in referenced twice in the input list
+
                 if node["name"] == "forge.concatenate" and len(input_names) == 1:
                     inp_shape = graph["nodes"][node["inputs"][input_port][0]]["attrs"]["shape"][0][0]
                     out_shape = node["attrs"]["shape"][0][0]
@@ -2392,7 +2422,6 @@ def compile_tvm_to_python(
 
                 ops[node["nid"]] = Operation(
                     function_name=function_name,
-                    # node_name=node["forge_name"],
                     output_name=node["forge_name"],
                     input_names=input_names,
                     args=args,
@@ -2402,9 +2431,11 @@ def compile_tvm_to_python(
                         for input_port in range(int(node["attrs"]["num_inputs"]))
                     ],
                 )
+        logger.trace("Processed graph nodes")
 
         if any([input is None for input in forge_inputs]):
             forge_inputs = flattened_pytorch_inputs
+        logger.trace("Set forge inputs")
 
         for output_nid in output_nodes:
             output_node = graph["nodes"][output_nid]
@@ -2424,6 +2455,7 @@ def compile_tvm_to_python(
                     "attrs": {"num_inputs": "1"},
                 }
             )
+        logger.trace("Processed output nodes")
 
         def replace_node_name(orig, new):
             for op in ops.values():
@@ -2438,6 +2470,7 @@ def compile_tvm_to_python(
         submodule = False
         param_names = {}
         const_names = {}
+        logger.trace("Completed processing of graph")
         # if compiler_cfg.tvm_module_to_num_patterns.get(framework_mod.get_name(), None):
         #     match_subgraph_patterns = compiler_cfg.tvm_module_to_num_patterns[framework_mod.get_name()]
 
@@ -2550,13 +2583,16 @@ def compile_tvm_to_python(
             for weight in framework_mod.module.weights:
                 if weight.dtype in ForgeWriter.incompatible_np_float_types:
                     contains_incompatible_np_floats = True
+        logger.debug(f"contains_incompatible_np_floats: {contains_incompatible_np_floats}")
 
         current_module_name = module_name
         if current_module_name is None:
             current_module_name = graph_name
+        logger.debug(f"current_module_name: {current_module_name}")
 
         if len(json_graphs) > 1:
             current_module_name += f"_{json_graph['device']}_{graph_index}"
+        logger.debug(f"current_module_name after json_graphs check: {current_module_name}")
 
         if json_graph["device"] == "tt":
             delete_inputs = not (
@@ -2574,8 +2610,10 @@ def compile_tvm_to_python(
             )
         else:
             writer = PyTorchWriter(current_module_name, source_framework=framework)
+        logger.debug(f"Writer initialized: {writer}")
 
         writer.write_header()
+        logger.debug("Header written")
 
         if submodule:
             writer.write_class_definition(matched_params, matched_consts, class_name="Submodel", is_submodel=True)
@@ -2588,8 +2626,8 @@ def compile_tvm_to_python(
             writer.write_class_definition(params, constants, num_submodels=len(subgraph_matches))
         else:
             writer.write_class_definition(params, constants)
+        logger.debug("Class definition written")
 
-        # can submodules be called in a loop? IE one outputs into the next
         loop_start = None
         prev_op = None
         for key in sorted(ops):
@@ -2615,18 +2653,18 @@ def compile_tvm_to_python(
             else:
                 loop_start = None
                 prev_op = None
+        logger.debug("Loop processing completed")
 
-        # if there are any unconsumed inputs in the framework graph, they will not be part of the
-        # generated graph, so we should add dummy variables to cunsume them. This is only needed for
-        # the first module.
         if graph_index == 0:
             for input_index, _ in enumerate(forge_inputs):
                 if input_index not in graph_input_names:
                     graph_input_names[input_index] = f"unused_input_{input_index}"
+        logger.debug(f"graph_input_names: {graph_input_names}")
 
         for key in sorted(ops):
             if len(ops[key].loop_with):
                 replace_node_name(ops[key].loop_with[-1].output_name, ops[key].output_name)
+        logger.debug("Node names replaced")
 
         def delete_unneeded_outputs(ops, returns):
             consumers = {}
@@ -2650,39 +2688,44 @@ def compile_tvm_to_python(
                         ops[key].inputs_to_delete.append(input_name)
 
         delete_unneeded_outputs(ops, returns)
+        logger.debug("Unneeded outputs deleted")
+
         if is_cpu_pre:
             writer.write_forward(ops, graph_input_names, returns, returns_requiring_batch_dim_fix)
         else:
             writer.write_forward(ops, graph_input_names, returns)
+        logger.debug("Forward pass written")
 
         param_file_name = None
         if len(params_from_tvm):
             param_file_name = os.path.join(writer.module_directory, writer.module_name + "_params.pt")
             torch.save(params_from_tvm, param_file_name)
+        logger.debug(f"param_file_name: {param_file_name}")
 
         if framework == "pytorch":
-            # Store named parameters
             names_params_file_name = os.path.join(writer.module_directory, writer.module_name + "_names_params.pt")
             named_parameters = dict(framework_mod.module.state_dict().items())
             torch.save(named_parameters, names_params_file_name)
 
-            # Store named buffers
             named_buffers_file_name = os.path.join(writer.module_directory, writer.module_name + "_named_buffers.pt")
             named_buffers = dict(framework_mod.module.named_buffers())
             torch.save(named_buffers, named_buffers_file_name)
 
-            # Generate Forge module parameter parser
             param_names.update(const_names)
             writer.write_param_parser(param_names, param_file_name, names_params_file_name, named_buffers_file_name)
         else:
             param_names.update(const_names)
             writer.write_param_parser(param_names, param_file_name)
+        logger.debug("Parameter parser written")
 
         writer.close_file()
+        logger.debug("File closed")
 
         modules.append(writer)
+        logger.debug(f"Writer appended to modules: {writer}")
 
-    if compiler_cfg.retain_tvm_python_files:
-        save_writers_metadata(modules, flattened_pytorch_inputs, forge_inputs, graph_name)
+        if compiler_cfg.retain_tvm_python_files:
+            save_writers_metadata(modules, flattened_pytorch_inputs, forge_inputs, graph_name)
+        logger.debug("Writers metadata saved")
 
-    return modules, forge_inputs
+        return modules, forge_inputs

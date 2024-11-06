@@ -154,3 +154,34 @@ def test_batch_size_training(batch_size, in_features, out_features):
 
     loss.backward()
     tt_model.backward()
+
+
+@pytest.mark.parametrize("gb", [0.1])
+def test_memory_usage(gb):
+    class MatmulModule(nn.Module):
+        def __init__(self, dim_size):
+            super(MatmulModule, self).__init__()
+            self.weight = nn.Parameter(torch.rand(dim_size, dim_size))
+            self.constant = 2.0
+
+        def forward(self, x, y):
+            result1 = torch.matmul(x, self.weight)
+            result2 = torch.matmul(y, self.weight) * self.constant
+            out = torch.add(result1, result2)
+
+            return out
+
+    # Calculate dimensions to use specified GB of DRAM
+    total_dram_bytes = gb * 1024**3  # GB in bytes
+    bytes_per_element = 4  # Assuming 32-bit floats (4 bytes per element)
+    total_elements = total_dram_bytes // bytes_per_element  # Total elements for specified GB
+
+    # Assuming square matrix for simplicity
+    dim_size = int(total_elements**0.5)
+
+    model = MatmulModule(dim_size)
+    inputs_x = torch.rand(1, dim_size, dim_size)
+    inputs_y = torch.rand(1, dim_size, dim_size)
+
+    compiled_model = forge.compile(model, sample_inputs=[inputs_x, inputs_y])
+    output = compiled_model(inputs_x, inputs_y)

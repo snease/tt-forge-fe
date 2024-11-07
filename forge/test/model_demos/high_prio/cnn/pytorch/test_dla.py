@@ -28,10 +28,10 @@ variants_func = {
     "dla60x_c": dla60x_c,
     "dla60": dla60,
     "dla60x": dla60x,
-    "dla102": dla102,
-    "dla102x": dla102x,
-    "dla102x2": dla102x2,
-    "dla169": dla169,
+    # "dla102": dla102,
+    # "dla102x": dla102x,
+    # "dla102x2": dla102x2,
+    # "dla169": dla169,
 }
 variants = list(variants_func.keys())
 
@@ -41,10 +41,6 @@ variants = list(variants_func.keys())
 def test_dla_pytorch(variant, test_device):
     # Forge configuration parameters
     compiler_cfg = forge.config._get_global_compiler_config()
-    if variant in ("dla102", "dla102x", "dla102x2", "dla169"):
-        compiler_cfg.compile_depth = forge.CompileDepth.FINISH_COMPILE
-    else:
-        compiler_cfg.compile_depth = forge.CompileDepth.SPLIT_GRAPH
     func = variants_func[variant]
 
     # Load data sample

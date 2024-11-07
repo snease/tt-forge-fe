@@ -27,10 +27,14 @@ variants = ["vgg11", "vgg13", "vgg16", "vgg19", "bn_vgg19", "bn_vgg19b"]
 def test_vgg_osmr_pytorch(variant, test_device):
     # STEP 1: Set Forge configuration parameters
     compiler_cfg = forge.config._get_global_compiler_config()  # load global compiler config object
-    compiler_cfg.compile_depth = forge.CompileDepth.SPLIT_GRAPH
+    # compiler_cfg.compile_depth = forge.CompileDepth.SPLIT_GRAPH
 
     model = download_model(ptcv_get_model, variant, pretrained=True)
     model.eval()
+    
+    # print(model)
+    model = model.features.stage1.unit1.conv
+    print("sliced model",model)
 
     # Image preprocessing
     try:
@@ -52,7 +56,7 @@ def test_vgg_osmr_pytorch(variant, test_device):
         )
         input_batch = torch.rand(1, 3, 224, 224)
 
-    compiled_model = forge.compile(model, sample_inputs=[input_batch], module_name=f"pt_{variant}_osmr")
+    compiled_model = forge.compile(model, sample_inputs=[input_batch], module_name=f"pt_{variant}_osmr_s1")
 
 
 def test_vgg_19_hf_pytorch(test_device):

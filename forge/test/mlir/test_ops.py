@@ -55,6 +55,29 @@ def test_cast(operand_and_cast_dtype):
     assert all([compare_with_golden_pcc(golden=fo, calculated=co, pcc=0.99) for fo, co in zip(fw_out, co_out)])
 
 
+
+def test_conv_vgg_issue():
+    class conv_issue(nn.Module):
+        def __init__(self):
+            super().__init__()
+            self.conv = nn.Conv2d(3, 64, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1))
+
+        def forward(self, x):
+            return self.conv(x)
+
+    inputs = [torch.rand(1,3,224,224)]
+
+    framework_model = conv_issue()
+    fw_out = framework_model(*inputs)
+
+    compiled_model = forge.compile(framework_model, sample_inputs=inputs)
+    co_out = compiled_model(*inputs)
+
+    co_out = [co.to("cpu") for co in co_out]
+    fw_out = [fw_out] if isinstance(fw_out, torch.Tensor) else fw_out
+    assert all([compare_with_golden_pcc(golden=fo, calculated=co, pcc=0.99) for fo, co in zip(fw_out, co_out)])
+    
+
 @pytest.mark.parametrize(
     "shape",
     [

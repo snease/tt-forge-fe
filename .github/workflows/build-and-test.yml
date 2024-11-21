@@ -3,7 +3,8 @@ name: Build and Test
 on:
   workflow_dispatch:
   workflow_call:
-
+  push:
+    
 jobs:
 
   build-image:
@@ -109,6 +110,12 @@ jobs:
       with:
         create-symlink: true
         key: ${{ matrix.build.runs-on }}-runtime-${{ matrix.build.enable_runtime }}-${{ env.SDK_VERSION }}
+
+    - name: Reset board
+      shell: bash
+      run: |
+        tt-smi-metal --help
+        tt-smi-metal -r 0
 
     - name: Build
       shell: bash

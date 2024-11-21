@@ -114,8 +114,8 @@ jobs:
     - name: Reset board
       shell: bash
       run: |
-        tt-smi-metal --help
-        tt-smi-metal -r 0
+        /usr/local/bin/tt-smi-metal --help
+        /usr/local/bin/tt-smi-metal -r 0
 
     - name: Build
       shell: bash

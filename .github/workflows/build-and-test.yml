@@ -98,9 +98,10 @@ jobs:
         source env/activate
         cmake -G Ninja \
         -B ${{ steps.strings.outputs.build-output-dir }} \
-        -DCMAKE_BUILD_TYPE=Release \
+        -DCMAKE_BUILD_TYPE=Debug \
         -DCMAKE_C_COMPILER=clang \
         -DCMAKE_CXX_COMPILER=clang++ \
+        -DCODE_COVERAGE=ON \
         -DCMAKE_C_COMPILER_LAUNCHER=ccache \
         -DCMAKE_CXX_COMPILER_LAUNCHER=ccache
         cmake --build ${{ steps.strings.outputs.build-output-dir }}
@@ -123,7 +124,15 @@ jobs:
                --splitting-algorithm least_duration \
                -m "${{ inputs.test_mark }}" \
                --junit-xml=${{ steps.strings.outputs.test_report_path }} \
+               --cov-report xml:cov.xml \
+               --cov=forge \
                2>&1 | tee pytest.log
+
+    - name: Generate coverage report
+      run: |
+        lcov --directory build --capture --output-file coverage.info
+        lcov --extract coverage.info '**/forge/*' --output-file coverage.info
+        lcov --list coverage.info
 
     - name: Upload Test Log
       uses: actions/upload-artifact@v4

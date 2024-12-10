@@ -112,6 +112,8 @@ target_link_directories(ttforge_csrc PRIVATE
     ${METAL_LIB_DIR}
     ${TORCH_LIB_DIR})
 
+target_link_libraries(ttforge_csrc PUBLIC coverage_config)
+
 ### End of ttforge_csrc ###
 
 #### Copy python module extension to ttforge directory ####

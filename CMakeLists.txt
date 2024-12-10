@@ -36,6 +36,18 @@ endif()
 
 add_compile_options(-Wall -Wextra -Wpedantic -Werror -Wno-unused-parameter)
 
+add_library(coverage_config INTERFACE)
+option(CODE_COVERAGE "Enable coverage reporting" OFF)
+if(CODE_COVERAGE)
+  # Add required flags (GCC & LLVM/Clang)
+  target_compile_options(coverage_config INTERFACE
+    -O0        # no optimization
+    -g         # generate debug info
+    --coverage # sets all required flags
+  )
+  target_link_options(coverage_config INTERFACE --coverage)
+endif(CODE_COVERAGE)
+
 if (CMAKE_BUILD_TYPE STREQUAL "Debug" OR CMAKE_BUILD_TYPE STREQUAL "RelWithDebInfo")
     add_compile_options(-DDEBUG)
 endif()

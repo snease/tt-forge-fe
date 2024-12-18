@@ -20,7 +20,6 @@ from typing import Optional, List, Dict, Type, Union
 from forge import ForgeModule, Module, DepricatedVerifyConfig
 from forge.op_repo import TensorShape
 from forge.verify import TestKind  # , verify_module
-from forge.config import _get_global_compiler_config
 from forge._C import MathFidelity
 
 from .compat import TestDevice

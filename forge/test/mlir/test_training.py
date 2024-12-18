@@ -10,6 +10,8 @@ import forge
 import forge.config
 from forge.verify.compare import compare_with_golden
 
+from forge.config import CompilerConfig
+
 
 @pytest.mark.push
 def test_torch_training():

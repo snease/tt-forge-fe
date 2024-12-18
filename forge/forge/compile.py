@@ -14,7 +14,6 @@ from forge.compiled_graph_state import CompiledGraphState, CompiledModel, Compil
 from forge.config import (
     CompilerConfig,
     CompileDepth,
-    _get_global_compiler_config,
 )
 from forge._C import (
     link_past_cache_ios,
@@ -180,6 +179,7 @@ def compile_main(
     optimizer: Optional[torch.optim.Optimizer] = None,
     training: bool = False,
     attach_to: Optional[CompiledModel] = None,
+    compiler_cfg: CompilerConfig = CompilerConfig(),
 ) -> CompiledModel:
     """
     Main entry point for compiling modules from different frameworks for Tenstorrent devices.
@@ -214,9 +214,6 @@ def compile_main(
     """
 
     assert isinstance(module, AnyModule), "Only PyTorch, TensorFlow, and Forge modules are supported."
-
-    compiler_cfg = _get_global_compiler_config()
-    compiler_cfg.apply_env_config_overrides()
 
     if module_name is None:
         module_name = module.__class__.__name__
@@ -597,9 +594,6 @@ def init_compile(context: CompileContext) -> CompileDepth:
     force_full = bool(int(os.environ.get("FORGE_FORCE_FULL_COMPILE_DEPTH", "0")))
     if force_full:
         compiler_cfg.compile_depth = CompileDepth.FULL
-
-    context.backend_output_directory = compiler_cfg.backend_output_dir
-    ci.initialize_output_build_directory(context.backend_output_directory)
 
     # compiler_cfg is fully formed
     if "FORGE_LOAD_CONFIG" in os.environ:

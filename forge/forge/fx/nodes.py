@@ -15,7 +15,7 @@ from loguru import logger
 
 from forge._C.graph import OpType
 from forge.tensor import pytorch_dtype_to_forge_dataformat
-from forge.config import CompilerConfig, _get_global_compiler_config
+from forge.config import CompilerConfig
 
 
 class ForgeNode:
@@ -242,51 +242,6 @@ def process_conv2d(node, forge_op_name):
     return ForgeNode(OpType(forge_op_name, attrs), inputs)
 
 
-def process_maxpool2d(node, forge_op_name):
-    assert (
-        len(node.args) >= 2 and len(node.args) <= 7
-    ), f"Maxpool-2d supposed to have 2~7 args: #args = {len(node.args)}"
-    inputs = [
-        node.args[0],
-    ]
-    kernel_size = node.args[1]
-    strides = node.args[1]
-    padding = [0] * 4
-    dilation = 1
-    ceil_mode = False
-
-    if len(node.args) >= 3:
-        strides = node.args[2]
-
-    if len(node.args) >= 4:
-        if isinstance(node.args[3], list):
-            if len(node.args[3]) == 2:
-                padding = [node.args[3][1], node.args[3][1], node.args[3][0], node.args[3][0]]
-            else:
-                padding = node.args[3]
-        else:
-            padding = [node.args[3]] * 4
-
-    if len(node.args) >= 5:
-        dilation = node.args[4]
-
-    if len(node.args) >= 6:
-        ceil_mode = node.args[5]
-
-    compiler_cfg = _get_global_compiler_config()
-    add_sub_surround = compiler_cfg.max_pool_add_sub_surround
-    add_sub_surround_value = compiler_cfg.max_pool_add_sub_surround_value
-    attrs = (
-        kernel_size + strides + [dilation, ceil_mode] + padding + [add_sub_surround, add_sub_surround_value, False]
-    )  # channel-last = False for pt
-
-    forge_node = ForgeNode(OpType(forge_op_name, attrs), inputs)
-    forge_node.shape = node.meta["tensor_meta"][0].shape
-    forge_node.dtype = pytorch_dtype_to_forge_dataformat(node.meta["tensor_meta"][0].dtype)
-    forge_node.wrap_tuple = True
-    return forge_node
-
-
 def process_matmul(node, forge_op_name):
     assert len(node.args) == 2 or len(node.args) == 3
     if len(node.args) == 3:
@@ -511,7 +466,6 @@ dynamo_to_forge_function = {
     "lt": (process_dummy_no_attr, "less"),
     "lte": (process_dummy_no_attr, "less_equal"),
     "matmul": (process_dummy_no_attr, "matmul"),
-    "max_pool2d_with_indices": (process_maxpool2d, "max_pool2d"),
     "mean": (process_mean, "reduce_avg"),
     "mm": (process_matmul, "matmul"),
     "mul": (process_dummy_no_attr, "multiply"),
@@ -897,9 +851,7 @@ def unsupported_shared_embedding_input(
             search_up(raw_input, visited)
 
 
-def get_unsupported_nodes(
-    graph: torch.fx.Graph, config: CompilerConfig
-) -> Tuple[Set[torch.fx.Node], Set[torch.fx.Node]]:
+def get_unsupported_nodes(graph: torch.fx.Graph) -> Tuple[Set[torch.fx.Node], Set[torch.fx.Node]]:
     # Traverse the FX graph and find all the nodes that are not supported and should fall back to CPU
     # Returns a set of unsupported nodes, and a set of unsupported outputs - since there's only one output node,
     # we represent those by nodes that drive the output, and have to be in a separate set
@@ -917,9 +869,9 @@ def get_unsupported_nodes(
         if op_name == "getitem":
             continue
 
-        if op_name in config.cpu_fallback_ops:
-            unsuppored_nodes.add(node)
-            continue
+        # if op_name in config.cpu_fallback_ops:
+        #     unsuppored_nodes.add(node)
+        #     continue
 
         if is_supported_op(op_name, node):
             continue

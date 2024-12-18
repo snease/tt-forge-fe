@@ -14,7 +14,6 @@ import pytest
 
 # import forge._C.pattern_matcher as pypattern_matcher
 from forge.module import OnnxModule, ForgeModule, TFLiteModule
-from forge.config import _get_global_compiler_config
 from forge.verify.config import _get_global_verify_config
 import forge
 from forge.tensor import to_pt_tensors
@@ -2043,7 +2042,7 @@ def generate_forge_module(
     global counter
 
     if compiler_cfg is None:
-        compiler_cfg = _get_global_compiler_config()
+        compiler_cfg = CompilerConfig()
 
     if verify_cfg is None:
         verify_cfg = _get_global_verify_config()
@@ -2131,7 +2130,7 @@ def compile_tvm_to_python(
     framework_mod, graph_name, inputs, module_name=None, compiler_cfg=None, verify_cfg=None, input_names=[]
 ):
     if compiler_cfg is None:
-        compiler_cfg = _get_global_compiler_config()
+        compiler_cfg = CompilerConfig()
 
     is_training = False if verify_cfg == None else verify_cfg.test_kind.is_training()
 

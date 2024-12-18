@@ -9,6 +9,7 @@ import torch
 from torch import nn
 
 import forge
+from forge.config import CompilerConfig
 from forge.tensor import to_forge_tensors
 from tvm.relay.op.transform import squeeze
 from forge.verify.verify import verify
@@ -146,14 +147,14 @@ def test_avgpool3d(shape, kernel_size, stride):
         def forward(self, x):
             return nn.functional.avg_pool3d(x, kernel_size=kernel_size, stride=stride)
 
-    compiler_cfg = forge.config._get_global_compiler_config()
+    compiler_cfg = CompilerConfig()
     compiler_cfg.compile_depth = (
         forge.CompileDepth.SPLIT_GRAPH
     )  # Due to #https://github.com/tenstorrent/tt-mlir/issues/1343
     inputs = [torch.rand(shape)]
 
     framework_model = AvgPool3D()
-    compiled_model = forge.compile(framework_model, sample_inputs=inputs)
+    compiled_model = forge.compile(framework_model, sample_inputs=inputs, compiler_cfg=compiler_cfg)
 
     if compiler_cfg.compile_depth == forge.CompileDepth.FULL:
         verify(inputs, framework_model, compiled_model)
@@ -1453,9 +1454,6 @@ def test_sqrt(x_shape, y_shape):
 @pytest.mark.parametrize("embedding_dim", [3200])
 @pytest.mark.push
 def test_embedding(vocab_size, token_num, embedding_dim):
-    compiler_cfg = forge.config._get_global_compiler_config()
-    compiler_cfg.enable_tvm_cpu_fallback = False
-
     class Embedding(nn.Module):
         def __init__(self):
             super().__init__()

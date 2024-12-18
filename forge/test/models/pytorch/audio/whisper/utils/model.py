@@ -14,9 +14,9 @@ from transformers import (
 from transformers.modeling_attn_mask_utils import _prepare_4d_causal_attention_mask
 
 import forge
+from forge.config import CompilerConfig
 from test.utils import download_model
 from forge.forgeglobal import TILE_DIM
-from forge.config import _get_global_compiler_config
 
 
 class Whisper_encoder(torch.nn.Module):
@@ -70,9 +70,8 @@ class Whisper_decoder(torch.nn.Module):
 
 
 def generate_model_whisper_decoder_past_cache(test_device, variant):
-    compiler_cfg = _get_global_compiler_config()
+    compiler_cfg = CompilerConfig()
     compiler_cfg.enable_tvm_cpu_fallback = False  # Run full model on silicon
-    compiler_cfg.input_queues_on_host = True
     compiler_cfg.enable_link_past_cache_ios = True
     compiler_cfg.default_df_override = forge._C.DataFormat.Float16_b
 
@@ -150,7 +149,7 @@ def generate_model_whisper_decoder_past_cache(test_device, variant):
 
 # check the name later # enc-dec
 def generate_model_whisper_enc_dec(test_device, variant):
-    compiler_cfg = _get_global_compiler_config()
+    compiler_cfg = CompilerConfig()
     compiler_cfg.amp_level = 1
     compiler_cfg.enable_tvm_cpu_fallback = False  # Run full model on silicon
     compiler_cfg.compile_subgraphs = True

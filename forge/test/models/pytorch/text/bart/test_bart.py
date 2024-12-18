@@ -9,7 +9,7 @@ from transformers.models.bart.modeling_bart import shift_tokens_right
 import pytest
 import forge
 
-from forge.config import CompileDepth, _get_global_compiler_config
+from forge.config import CompileDepth, CompilerConfig
 
 
 class BartWrapper(torch.nn.Module):
@@ -25,7 +25,7 @@ class BartWrapper(torch.nn.Module):
 @pytest.mark.nightly
 @pytest.mark.model_analysis
 def test_pt_bart_classifier(test_device):
-    compiler_cfg = _get_global_compiler_config()
+    compiler_cfg = CompilerConfig()
     compiler_cfg.compile_depth = CompileDepth.SPLIT_GRAPH
 
     model_name = f"facebook/bart-large-mnli"

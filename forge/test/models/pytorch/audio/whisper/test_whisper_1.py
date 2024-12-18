@@ -20,10 +20,10 @@ from transformers import (
 )
 from datasets import load_dataset
 from typing import Optional
+from forge.config import CompilerConfig
 from forge.forgeglobal import TILE_DIM
 import forge
 from test.utils import download_model
-from forge.config import _get_global_compiler_config
 from forge.transformers.pipeline import pipeline as forge_pipeline
 from test.models.pytorch.audio.whisper.utils.model import (
     Whisper_encoder,
@@ -77,7 +77,7 @@ def test_whisper_dec_past_cache(test_device, variant):
 @pytest.mark.skip(reason="not supported yet")
 @pytest.mark.parametrize("variant", variants, ids=variants)
 def test_whisper_enc_dec(test_device, variant):
-    compiler_cfg = _get_global_compiler_config()
+    compiler_cfg = CompilerConfig()
     compiler_cfg.enable_tvm_cpu_fallback = False  # Run full model on silicon
     compiler_cfg.input_queues_on_host = True
     compiler_cfg.compile_subgraphs = True

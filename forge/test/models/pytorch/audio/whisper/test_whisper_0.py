@@ -20,8 +20,8 @@ from transformers import (
 
 from forge.forgeglobal import TILE_DIM
 import forge
+from forge.config import CompilerConfig
 from test.utils import download_model
-from forge.config import _get_global_compiler_config
 from forge.transformers.pipeline import pipeline as forge_pipeline
 import time
 
@@ -36,7 +36,7 @@ variants = [
 
 def generate_model_whisper_congen_hf_pytorch(test_device, variant):
     # Configurations
-    compiler_cfg = _get_global_compiler_config()
+    compiler_cfg = CompilerConfig
     compiler_cfg.compile_depth = forge.CompileDepth.POST_INITIAL_GRAPH_PASS
 
     class Wrapper(torch.nn.Module):
